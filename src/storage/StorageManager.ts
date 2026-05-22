@@ -67,15 +67,30 @@ class StorageManagerImpl {
     await tx.done;
   }
 
-  async getExcelData(): Promise<ExcelRow[]> {
+  async getExcelData(offset?: number, limit?: number): Promise<ExcelRow[]> {
     const db = await getDB();
+    if (offset !== undefined && limit !== undefined) {
+      const tx = db.transaction('excelData', 'readonly');
+      const store = tx.objectStore('excelData');
+      const allRows = await store.getAll();
+      return allRows.slice(offset, offset + limit);
+    }
     return db.getAll('excelData');
   }
 
-  async setExcelData(rows: ExcelRow[]): Promise<void> {
+  async getExcelDataCount(): Promise<number> {
+    const db = await getDB();
+    const tx = db.transaction('excelData', 'readonly');
+    const store = tx.objectStore('excelData');
+    return store.count();
+  }
+
+  async setExcelData(rows: ExcelRow[], clearFirst = true): Promise<void> {
     const db = await getDB();
     const tx = db.transaction('excelData', 'readwrite');
-    await tx.objectStore('excelData').clear();
+    if (clearFirst) {
+      await tx.objectStore('excelData').clear();
+    }
     for (const row of rows) {
       tx.objectStore('excelData').put(row);
     }

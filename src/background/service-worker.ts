@@ -200,22 +200,35 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
 
   // 7. Get Excel Data from IndexedDB
   if (message.type === MessageType.GET_EXCEL_DATA) {
-    StorageManager.getExcelData()
-      .then(rows => {
-        sendResponse({ excelRows: rows || [] });
-      })
-      .catch(err => {
-        console.error("SW: Failed to get excel data:", err);
-        sendResponse({ error: err.message });
-      });
+    const payload = (message.payload || {}) as { offset?: number; limit?: number; countOnly?: boolean };
+    
+    if (payload.countOnly) {
+      StorageManager.getExcelDataCount()
+        .then(count => {
+          sendResponse({ count });
+        })
+        .catch(err => {
+          console.error("SW: Failed to get excel data count:", err);
+          sendResponse({ error: err.message });
+        });
+    } else {
+      StorageManager.getExcelData(payload.offset, payload.limit)
+        .then(rows => {
+          sendResponse({ excelRows: rows || [] });
+        })
+        .catch(err => {
+          console.error("SW: Failed to get excel data:", err);
+          sendResponse({ error: err.message });
+        });
+    }
     return true; // Keep channel open for async response
   }
 
   // 8. Set Excel Data to IndexedDB
   if (message.type === MessageType.SET_EXCEL_DATA) {
-    const payload = message.payload as { excelRows: any[] };
+    const payload = message.payload as { excelRows: any[]; updateOnly?: boolean };
     console.log("SW: Message received - SET_EXCEL_DATA. Saving", payload?.excelRows?.length, "rows...");
-    StorageManager.setExcelData(payload.excelRows)
+    StorageManager.setExcelData(payload.excelRows, !payload.updateOnly)
       .then(() => {
         console.log("SW: SET_EXCEL_DATA successfully written to IndexedDB.");
         sendResponse({ success: true });

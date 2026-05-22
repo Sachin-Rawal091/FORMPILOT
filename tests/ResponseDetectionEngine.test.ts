@@ -13,6 +13,14 @@ describe('ResponseDetectionEngine', () => {
         sendMessage: vi.fn(),
       },
     };
+    (globalThis as any).Element.prototype.getBoundingClientRect = () => ({
+      width: 100,
+      height: 25,
+      top: 0,
+      left: 0,
+      bottom: 25,
+      right: 100,
+    } as any);
   });
 
   afterEach(() => {

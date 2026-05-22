@@ -155,33 +155,23 @@ export class Executor {
       this.recordingSteps = recordingRes.recording.steps;
       this.siteUrl = recordingRes.recording.siteUrl || window.location.href;
 
-      // 2. Fetch all Excel rows to process via background proxy
-      // The background returns all rows, but we only load them in chunks if needed.
-      // However, since we process sequentially, we just load them all into memory.
-      // To implement pagination, we should request chunks:
-      const excelRows: ExcelRow[] = [];
-      const CHUNK_SIZE = 50;
-      for (let offset = 0; offset < 10000; offset += CHUNK_SIZE) {
-         // In a real implementation we would fetch chunks, but GET_EXCEL_DATA returns all
-         // because IndexedDB get() in service-worker gets all. 
-         // For now, fetch all once since that's what the SW supports.
-      }
-
-      const excelRes = await this.safeSendMessage({
+      // 2. Fetch total rows count to process via background proxy
+      const countRes = await this.safeSendMessage({
         type: MessageType.GET_EXCEL_DATA,
+        payload: { countOnly: true },
         sessionId: this.sessionId,
         timestamp: Date.now()
       }, 5000);
-      if (excelRes?.error || !excelRes?.excelRows || excelRes.excelRows.length === 0) {
-        throw new Error(excelRes?.error || "No Excel data found for execution via extension proxy.");
+      if (countRes?.error || countRes?.count === undefined || countRes.count === 0) {
+        throw new Error(countRes?.error || "No Excel data found for execution via extension proxy.");
       }
-      excelRows.push(...excelRes.excelRows);
+      const totalRows = countRes.count;
 
       // 3. Mutex check and state initialization — includes
       //    recordingId and siteUrl for reference.
       const state = await StateManager.initializeSession(
         this.sessionId, 
-        excelRows.length,
+        totalRows,
         recordingId,
         this.siteUrl
       );
@@ -191,7 +181,7 @@ export class Executor {
       this.broadcastStateUpdate(state);
 
       // 4. Start the main execution loop
-      await this.runAllRows(excelRows);
+      await this.runAllRows(totalRows);
 
     } catch (err: any) {
       console.error("Execution failed to start:", err);
@@ -205,14 +195,36 @@ export class Executor {
   // navigating back to the form's initial state.
   // ─────────────────────────────────────────────────────────────────────
 
-  private async runAllRows(excelRows: ExcelRow[]) {
-    const totalRows = excelRows.length;
+  private async runAllRows(totalRows: number) {
     let state = (await StateManager.getState()) || this.createFallbackState(totalRows);
+
+    const CHUNK_SIZE = 50;
+    let excelRows: ExcelRow[] = [];
+    let currentChunkOffset = -1;
 
     for (let rowIdx = state.currentRowIndex; rowIdx < totalRows; rowIdx++) {
       if (!this.isRunning) break;
 
-      const row = excelRows[rowIdx];
+      // Load chunk if needed
+      const neededChunkOffset = Math.floor(rowIdx / CHUNK_SIZE) * CHUNK_SIZE;
+      if (currentChunkOffset !== neededChunkOffset) {
+        const chunkRes = await this.safeSendMessage({
+          type: MessageType.GET_EXCEL_DATA,
+          payload: { offset: neededChunkOffset, limit: CHUNK_SIZE },
+          sessionId: this.sessionId,
+          timestamp: Date.now()
+        }, 5000);
+        if (chunkRes?.error || !chunkRes?.excelRows) {
+          throw new Error(chunkRes?.error || "Failed to load Excel row chunk.");
+        }
+        excelRows = chunkRes.excelRows;
+        currentChunkOffset = neededChunkOffset;
+      }
+
+      const row = excelRows[rowIdx - currentChunkOffset];
+      if (!row) {
+        throw new Error(`Row ${rowIdx} not found in loaded chunk.`);
+      }
 
       // Skip already-completed rows (from previous partial runs)
       if (row.status === RowStatus.SUCCESS || row.status === RowStatus.SKIPPED) {
@@ -250,9 +262,10 @@ export class Executor {
       }
 
       // Persist Excel row status back to IndexedDB via background proxy
+      // We send back only the modified row to update it.
       const setExcelRes = await this.safeSendMessage({
         type: MessageType.SET_EXCEL_DATA,
-        payload: { excelRows },
+        payload: { excelRows: [row], updateOnly: true }, // Send only the updated row to be merged
         sessionId: this.sessionId,
         timestamp: Date.now()
       }, 3000);

@@ -44,9 +44,15 @@ describe('Real-World Matrix Test Suite', () => {
         }
         if (msg.type === 16) { // GET_EXCEL_DATA
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
-            StorageManager.getExcelData().then(rows => {
-              callback({ excelRows: rows });
-            });
+            if (msg.payload?.countOnly) {
+              StorageManager.getExcelData().then(rows => {
+                callback({ count: rows.length });
+              });
+            } else {
+              StorageManager.getExcelData().then(rows => {
+                callback({ excelRows: rows });
+              });
+            }
           });
           return true;
         }
@@ -93,12 +99,6 @@ describe('Real-World Matrix Test Suite', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  function broadcastChromeMessage(msg: any) {
-    for (const listener of listeners) {
-      listener(msg, {}, () => {});
-    }
-  }
 
   // Helper to run executor loop for a given recording and excel row
   async function runExecutorFlow(recording: any, excelRows: any[]) {
