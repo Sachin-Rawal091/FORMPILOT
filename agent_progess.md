@@ -1,0 +1,104 @@
+# FormPilot — Progress
+
+> **Phase:** 6 — Chrome Web Store Launch | **Updated:** 2026-05-21
+
+## Done
+- [x] Project folder created
+- [x] Agent workflow files set up
+- [x] Project definition synced from Notion FormPilot HQ
+- [x] Finalize tech stack (Chrome MV3 + TypeScript + React + Vite/CRXJS + Zustand + SheetJS + IndexedDB)
+- [x] Design architecture (from Notion: 4-layer — Popup → Service Worker → Content Script → Storage)
+- [x] Full plan sync from Notion — folder structure, interfaces, engine specs, sprint plan, constants, security
+- [x] Initialize Chrome Extension project (Vite + CRXJS + TypeScript + React)
+- [x] Create `manifest.json` (MV3)
+- [x] Define all TypeScript interfaces (`src/types/index.ts`)
+- [x] Define constants (`src/shared/constants.ts`)
+- [x] Scaffold folder structure
+- [x] Set up StorageManager.ts
+- [x] Scaffold service worker (router only, <100 lines)
+- [x] Scaffold content script entry point (executor.ts)
+- [x] domUtils.ts — setInputValue(), setSelectValue(), event dispatching
+- [x] SelectorEngine — 8-layer fallback + shadow DOM + scoring
+- [x] SmartWaitEngine — all 6 wait functions + exponential backoff
+- [x] ExecutionEngine — step queue, all 13 actions, step lifecycle
+- [x] RetryEngine — backoff, fallback chain retry, error classification
+- [x] ExcelDataEngine — SheetJS parsing, column mapping, ExcelRow[]
+- [x] StateManager — session snapshots, pause/resume/abort
+- [x] Phase 2: Orchestration & Response Detection
+    - [x] executor.ts — Mutex control, paginated Excel loading, page-retry cap loops, pause/resume/abort
+    - [x] recorder.ts — Debounced input (300ms), deduped clicks (200ms), SelectorMeta generator
+    - [x] ResponseDetectionEngine.ts — Captcha, success/failure, inline error checks, solver glassmorphic UI overlay
+    - [x] service-worker.ts — Event notification, active tab updates, action badges
+- [x] Phase 3: Popup UI
+    - [x] Popup shell — React + Zustand + Tailwind shell
+    - [x] HomeScreen — record/upload/run controls, mutex disabled run buttons
+    - [x] DataScreen — Excel drop/parse mapping UI, fuzzy matching column confidence HSL badges
+    - [x] RunScreen — progress radial indicators, status counters, overlay CaptchaModal triggers
+    - [x] LogScreen — color-coded log details, JSON/CSV exports
+    - [x] Strict Compiler — cleared all TS6133 unused declarations
+- [x] Phase 4: Testing & Polish
+    - [x] Vitest framework environment and happy-dom configuration
+    - [x] Unit tests for SelectorEngine (`SelectorEngine.test.ts`) - 11 scenarios
+    - [x] Unit tests for SmartWaitEngine (`SmartWaitEngine.test.ts`) - 8 scenarios
+    - [x] Unit tests for ExecutionEngine (`ExecutionEngine.test.ts`) - 15 scenarios
+    - [x] Unit tests for RetryEngine (`RetryEngine.test.ts`) - 7 scenarios
+    - [x] Unit tests for ExcelDataEngine (`ExcelDataEngine.test.ts`) - 6 scenarios
+    - [x] Unit tests for StateManager (`StateManager.test.ts`) - 9 scenarios
+    - [x] Unit tests for ResponseDetectionEngine (`ResponseDetectionEngine.test.ts`) - 21 scenarios
+    - [x] 100% passing tests (77/77 tests successfully verified)
+    - [x] Strict type-checking compilation validation (0 errors, 0 warnings)
+    - [x] Optimized Chrome Extension production build verification
+- [x] Phase 5: Integration Tests & Real-World Matrix
+    - [x] Integration flow tests (`IntegrationFlow.test.ts`) - 1 comprehensive end-to-end recording-to-execution loop
+    - [x] Real-world matrix tests (`RealWorldMatrix.test.ts`) - 6 complex simulated form validation scenarios
+    - [x] 100% passing test runner integration (84/84 tests successfully verified)
+    - [x] Fixed type verification compilation checker (`npx tsc --noEmit` completed with 0 errors)
+    - [x] Production Extension builds compiled successfully (`npm run build` in 727ms)
+    - [x] Built a high-fidelity 4-step premium Government KRP Registration Portal wizard (`krp_portal.html`)
+    - [x] Designed Node HTTP router to dynamically serve portal assets on port 8080
+    - [x] Verified full progressive wizard filling, step transition validation, submit-consent declaration triggers, and receipt modal approval checking using `chrome-devtools-mcp` tools
+    - [x] Fully Resolved Popup Autoclose, Navigation Loss, and Connection Bugs:
+        - Linked `recorder.ts` to `index.ts` to correctly bundle the recorder engine inside content scripts.
+        - Implemented a `GET_STATUS` communication handshake to seamlessly restore active recording states (recordingId, steps, target URL) across reloads and multi-page form transitions.
+        - Integrated auto-navigation in `startRecording` to update the active tab immediately to the target URL when recording begins.
+        - Executed `verify_flow_live.js` via Puppeteer to programmatically verify the end-to-end multi-page wizard flow on the Government KRP Portal, producing 10 high-fidelity progress screenshots and full IndexedDB save success.
+    - [x] Critical Root-Cause Fix — Recording Flow Not Persisting:
+        - **Root Cause:** Popup's `onMessage` listener was calling `sendResponse({ ack: true })` for ALL message types, intercepting the service worker's async `GET_STATUS` response before it could reach the content script. This prevented the recorder from restoring `isRecording: true` state after page navigations.
+        - **Fix 1 (Popup Store):** Added message-type whitelist filter — popup now only responds to `STATE_UPDATE`, `RECORDING_EVENT`, `EXECUTION_COMPLETE`, `CAPTCHA_DETECTED`. All other messages pass through to the service worker without interception.
+        - **Fix 2 (Service Worker):** Rewrote with serialized step queue to prevent race conditions from rapid RECORDING_EVENTS, proper tab tracking for STOP_RECORDING routing, and comprehensive logging.
+        - **Fix 3 (Store stopRecording):** Reads session storage FIRST (before sending STOP), merges in-memory and session-stored steps, only clears state after successful IndexedDB write.
+        - **Fix 4 (Content Script):** Removed competing generic `onMessage` handler from `index.ts` that was interfering with recorder/executor message channels.
+        - **Fix 5 (Recorder):** Added `.catch()` to `chrome.runtime.sendMessage()` to prevent silent step loss.
+        - [x] Resolved 6 architectural bugs and test suite failures (BUG-001 through BUG-006):
+            - Removed dead ID-based label search from `SelectorEngine.ts` (BUG-001).
+            - Fixed `SmartWaitEngine.ts` race condition in `waitForSelectOptions` by checking options count immediately (BUG-002).
+            - Corrected `RetryEngine.ts` `retriesUsed` off-by-one inflation on skipped/failed optional steps and updated the test suite to expect correct counts (BUG-003).
+            - Confirmed unconditional timer cleanup inside `ResponseDetectionEngine.ts` to prevent test-leak warnings (BUG-004).
+            - Mapped proper `WAIT_DOM_STABLE_TIMEOUT` constant inside `ExecutionEngine.ts` for explicit WAIT actions (BUG-005).
+            - Created typed extension message sender helpers inside `src/shared/messages.ts` (BUG-006).
+            - Patched `TOGGLE_CHECKBOX` and `RICH_TEXT` Vitest runner environment failures, achieving 100% test completion (92/92 passing) and clean production build.
+            - **Fixed Storage Session Access Level:** Resolved the execution freeze at `0%` progress ("Processing Row 1 of 10") with "No execution events yet" in content scripts. Added `chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })` to `service-worker.ts` to grant the content script permission to read/write `chrome.storage.session`, enabling the `Executor` to run without throwing type errors.
+
+## In Progress
+- [/] Phase 6: Chrome Web Store Launch
+    - [x] Complete Chrome Web Store detailed listing and description ([chrome_store_listing.md](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/docs/launch/chrome_store_listing.md))
+    - [x] Draft high-fidelity Privacy Policy ([privacy_policy.md](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/docs/launch/privacy_policy.md))
+    - [x] Formulate professional host permission justification for `<all_urls>` ([permissions_justification.md](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/docs/launch/permissions_justification.md))
+    - [x] **Zero-Defect Audit COMPLETE** — 18 issues found and fixed (4 HIGH, 9 MEDIUM, 5 LOW):
+        - Fixed XSS selector injection via `CSS.escape()` in SelectorEngine
+        - Fixed 2 memory leaks in SmartWaitEngine (event listener + setInterval)
+        - Fixed message port leak in service-worker.ts
+        - Fixed crash bug in RecordingScreen (empty URL)
+        - Fixed stale closure in LogScreen
+        - Fixed CAPTCHA timer reset, style element leak, and false positive detection
+        - Fixed executor resume/abort/fatal-error message flow
+        - Fixed ProgressBar percentage calculation
+        - Implemented structured logger utility
+        - Added Tailwind fade-in/slide-up animations
+        - Filled package.json metadata
+        - All 92 tests pass, 0 TypeScript errors, production build succeeds
+    - [/] Production build check & final polish (Weeks 15–16 tasks)
+
+## Next
+- [ ] Week 15: Final production build checks (evict diagnostic/debugging logs from non-debug scripts)
+- [ ] Week 16: Submit packaged extension build bundle to the Chrome Web Store dashboard and address any feedback
