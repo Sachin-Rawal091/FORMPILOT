@@ -12,8 +12,7 @@ Every new conversation:
 3. Read `agent_progess.md` → know what's done & what's next
 4. Read `agent_log.md` → review past decisions & session history
 5. Read `agent_handoff.md` → see what other agents/models did
-6. Read `PLUGINS_PLAYBOOK.md` → load all plugin auto-activation rules & FormPilot-specific skill mappings
-7. Resume work from where you left off
+6. Resume work from where you left off
 
 ## Rules
 - Never start coding without checking progress first
@@ -24,8 +23,6 @@ Every new conversation:
 - Handle all errors gracefully
 - Log your work in `agent_handoff.md` so other agents know what you did
 - Ask before making breaking changes
-- Read `PLUGINS_PLAYBOOK.md` and auto-activate plugins based on its trigger rules — never wait for Sachin to ask
-- Announce plugin actions in the format: `[Plugin: <name>] → <what was done]`
 
 ## Project Definition
 > **Status:** ✅ Defined (source: [Notion — FormPilot HQ](https://www.notion.so/FormPilot-HQ-Master-Workspace-362c10bc080b814da659fef29417f993))

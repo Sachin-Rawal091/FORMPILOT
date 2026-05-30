@@ -226,6 +226,10 @@ describe('Integration Flow - Record to Execution Loop', () => {
     // Switch back to real timers for Execution Phase (async executors rely on actual tick timing)
     vi.useRealTimers();
 
+    // Mock ResponseDetectionEngine to simulate a success element on page so UNKNOWN isn't returned
+    const { ResponseDetectionEngine } = await import('../src/content/engines/ResponseDetectionEngine');
+    vi.spyOn(ResponseDetectionEngine, 'runSubmissionDetection').mockResolvedValue('SUCCESS');
+
     // --- 3. EXECUTION PHASE ---
     // Clear DOM and recreate fresh inputs to be populated
     document.body.innerHTML = '';

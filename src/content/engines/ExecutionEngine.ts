@@ -1,7 +1,8 @@
 import { Step, Action, LogStatus, SelectorResult } from "../../types";
-import { setInputValue, setSelectValue, setTextareaValue, dispatchEvents } from "../domUtils";
+import { setInputValue, setSelectValue, setTextareaValue, setCheckboxValue, dispatchEvents } from "../domUtils";
 import { SmartWaitEngine } from "./SmartWaitEngine";
 import { WAIT_ELEMENT_TIMEOUT, WAIT_DOM_STABLE_TIMEOUT } from "../../shared/constants";
+import { StorageManager } from "../../storage/StorageManager";
 
 export interface ResolvedValueResult {
   value: string | null;
@@ -111,8 +112,20 @@ export class ExecutionEngine {
         break;
 
       case Action.CLICK:
-      case Action.NAVIGATE_NEXT: // Same underlying DOM action, just different intent
         dispatchEvents(el, ["mousedown", "mouseup", "click"]);
+        // For buttons/links that might trigger wizard transitions,
+        // brief DOM stability wait to let section toggling/animations complete
+        if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button') {
+          await new Promise(r => setTimeout(r, 300));
+        }
+        break;
+
+      case Action.NAVIGATE_NEXT:
+        const currentURL = window.location.href;
+        dispatchEvents(el, ["mousedown", "mouseup", "click"]);
+        // Assuming WAIT_URL_CHANGE_TIMEOUT is imported or use hardcoded/SmartWaitEngine default
+        // We need to import WAIT_URL_CHANGE_TIMEOUT from constants at the top
+        await SmartWaitEngine.waitForURLChange(currentURL, 15000);
         break;
 
       case Action.SELECT:
@@ -127,11 +140,11 @@ export class ExecutionEngine {
         // Match radio by value attribute
         const nameAttr = el.getAttribute("name");
         if (nameAttr && resolvedValue) {
-          const radios = Array.from(document.querySelectorAll(`input[type="radio"][name="${nameAttr}"]`)) as HTMLInputElement[];
+          const escapedName = CSS.escape(nameAttr);
+          const radios = Array.from(document.querySelectorAll(`input[type="radio"][name="${escapedName}"]`)) as HTMLInputElement[];
           const targetRadio = radios.find(r => r.value === resolvedValue);
           if (targetRadio) {
-            targetRadio.checked = true;
-            dispatchEvents(targetRadio, ["change", "click"]);
+            setCheckboxValue(targetRadio, true);
           }
         }
         break;
@@ -140,8 +153,7 @@ export class ExecutionEngine {
         if (el instanceof HTMLInputElement && el.type === "checkbox") {
           const desiredState = step.checked !== undefined ? step.checked : true;
           if (el.checked !== desiredState) {
-            el.checked = desiredState;
-            dispatchEvents(el, ["change"]);
+            setCheckboxValue(el, desiredState);
           }
         }
         break;
@@ -157,7 +169,14 @@ export class ExecutionEngine {
 
       case Action.SUBMIT:
         if (el instanceof HTMLFormElement) {
-          el.submit();
+          // Find primary submit button to trigger native/framework handlers
+          const submitBtn = el.querySelector('button[type="submit"], input[type="submit"]');
+          if (submitBtn) {
+            dispatchEvents(submitBtn, ["mousedown", "mouseup", "click"]);
+          } else {
+            // Fallback to native form.submit() if no button exists
+            el.submit();
+          }
         } else {
           // If it's a button triggering submit
           dispatchEvents(el, ["mousedown", "mouseup", "click"]);
@@ -165,10 +184,23 @@ export class ExecutionEngine {
         break;
 
       case Action.FILE_UPLOAD:
-        // In a real execution, the blob would be fetched from StorageManager via an injected DataTransfer.
-        // For Phase 1 we stub the file upload logic since it relies on IndexedDB blobs.
-        if (el instanceof HTMLInputElement && el.type === "file") {
-          console.warn(`File upload for ${step.id} requires blob injection from executor.`);
+        if (el instanceof HTMLInputElement && el.type === "file" && resolvedValue) {
+          try {
+            // Send message to SW to fetch the file blob from IndexedDB since content script might not have direct IDB access or it might be asynchronous
+            // For now, if we have a direct dependency on StorageManager, we'll use it
+            const fileBlob = await StorageManager.getFileBlob(resolvedValue);
+            if (fileBlob && fileBlob.data) {
+              const file = new File([fileBlob.data], fileBlob.name, { type: fileBlob.type });
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(file);
+              el.files = dataTransfer.files;
+              dispatchEvents(el, ["change", "input"]);
+            } else {
+              console.warn(`File blob not found for alias: ${resolvedValue}`);
+            }
+          } catch (e) {
+            console.error(`Failed to inject file blob for ${resolvedValue}`, e);
+          }
         }
         break;
 

@@ -1,15 +1,35 @@
-# Dependency directories
+# ─── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
 jspm_packages/
 web_modules/
 
-# Production build outputs
+# ─── Production Build Outputs ─────────────────────────────────────────────────
 dist/
 dist-ssr/
 build/
 out/
+bin/
+obj/
 
-# Logs
+# ─── Screenshots & Media Artifacts ────────────────────────────────────────────
+live_demo_screenshots/
+screenshots/
+media/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+
+# ─── Agent Caches & Workspace Diagnostics ────────────────────────────────────
+.antigravity/
+.gemini/
+scratch/
+.tempmediaStorage/
+agent_temp/
+*.log
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/
 *.log
 npm-debug.log*
@@ -18,12 +38,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Diagnostic/Testing reports
+# ─── Diagnostic / Coverage Reports ────────────────────────────────────────────
 coverage/
 *.lcov
 .nyc_output
+.nyc-output/
+.nyc_metadata/
 
-# IDE / Editors
+# ─── IDE / Editor Configs ─────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.suo
@@ -34,20 +56,32 @@ coverage/
 .project
 .classpath
 .settings/
+*.sublime-project
+*.sublime-workspace
+.eslintcache
 
-# OS metadata
+# ─── TypeScript & Build Caches ────────────────────────────────────────────────
+*.tsbuildinfo
+.vite-cache/
+.parcel-cache/
+.rollup.cache/
+
+# ─── Vite & Vitest Temporaries ───────────────────────────────────────────────
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+vitest.config.ts.timestamp-*
+vitest.config.js.timestamp-*
+
+# ─── OS Metadata ──────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Local environment variables
+# ─── Local Environment & Secrets ─────────────────────────────────────────────
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 *.env.json
-
-# Antigravity/Agent specific files & folders
-.antigravity/
-.gemini/
-scratch/

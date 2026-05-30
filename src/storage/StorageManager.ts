@@ -1,4 +1,5 @@
 import { getDB } from './db';
+import { LOG_MAX_ENTRIES, LOG_RETENTION_DAYS } from '../shared/constants';
 import { 
   ExecutionState, 
   Recording, 
@@ -100,6 +101,48 @@ class StorageManagerImpl {
   async addLogEntry(entry: LogEntry): Promise<void> {
     const db = await getDB();
     await db.put('logs', entry);
+    // Periodically trigger cleanup (1% chance)
+    if (Math.random() < 0.01) {
+      this.cleanupLogs().catch(console.error);
+    }
+  }
+
+  async cleanupLogs(): Promise<void> {
+    const db = await getDB();
+    const tx = db.transaction('logs', 'readwrite');
+    const store = tx.objectStore('logs');
+    
+    // Cleanup by date
+    const cutoffTime = Date.now() - (LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const allKeys = await store.getAllKeys();
+    
+    // To do an efficient date cleanup without an index on timestamp, 
+    // we fetch all records to check their timestamps if they exceed max entries
+    if (allKeys.length > LOG_MAX_ENTRIES) {
+      const allLogs = await store.getAll();
+      allLogs.sort((a, b) => b.timestamp - a.timestamp); // Newest first
+      
+      const toDelete = allLogs.slice(LOG_MAX_ENTRIES);
+      for (const log of toDelete) {
+        store.delete(log.id);
+      }
+      
+      const remaining = allLogs.slice(0, LOG_MAX_ENTRIES);
+      for (const log of remaining) {
+        if (log.timestamp < cutoffTime) {
+          store.delete(log.id);
+        }
+      }
+    } else {
+      const allLogs = await store.getAll();
+      for (const log of allLogs) {
+        if (log.timestamp < cutoffTime) {
+          store.delete(log.id);
+        }
+      }
+    }
+    
+    await tx.done;
   }
 
   async getLogs(sessionId: string): Promise<LogEntry[]> {
@@ -118,9 +161,9 @@ class StorageManagerImpl {
     return db.get('files', alias);
   }
 
-  async setFileBlob(file: FileBlob): Promise<void> {
+  async getHistoricLogs(): Promise<LogEntry[]> {
     const db = await getDB();
-    await db.put('files', file);
+    return db.getAll('logs');
   }
 }
 

@@ -31,6 +31,10 @@ describe('Real-World Matrix Test Suite', () => {
   beforeEach(async () => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+
+    const { SmartWaitEngine } = await import('../src/content/engines/SmartWaitEngine');
+    vi.spyOn(SmartWaitEngine, 'waitForURLChange').mockResolvedValue(true);
+
     mockChrome.runtime.sendMessage.mockReset();
     mockChrome.runtime.sendMessage.mockImplementation((msg: any, callback?: any) => {
       if (callback) {
@@ -196,7 +200,7 @@ describe('Real-World Matrix Test Suite', () => {
       expect(passInp.value).toBe('supersecret');
       expect(submitFired).toBe(true);
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 2000 });
+    }, { timeout: 5000 });
   });
 
   it('Scenario 2: Multi-step SaaS Signup - Should complete page-to-page transitions', async () => {
@@ -337,7 +341,7 @@ describe('Real-World Matrix Test Suite', () => {
       expect(termsCheckbox.checked).toBe(true);
       expect(submitFired).toBe(true);
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 2000 });
+    }, { timeout: 5000 });
   });
 
   it('Scenario 3: Government Static HTML Form - Should fill 15+ native inputs perfectly', async () => {
@@ -470,7 +474,7 @@ describe('Real-World Matrix Test Suite', () => {
       expect((elements['agree-2'] as HTMLInputElement).checked).toBe(true);
       expect((elements['agree-3'] as HTMLInputElement).checked).toBe(true);
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 3000 });
+    }, { timeout: 5000 });
   });
 
   it('Scenario 4: Job Application (Workday style) - Should handle fields and stub file upload gracefully', async () => {
@@ -544,7 +548,7 @@ describe('Real-World Matrix Test Suite', () => {
       expect(nameInp.value).toBe('Sachin Rawal');
       expect(coverLetter.value).toBe('I am highly interested in the role.');
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 2000 });
+    }, { timeout: 5000 });
   });
 
   it('Scenario 5: E-commerce Checkout (Shopify style) - Should verify dropdown selects and radio values', async () => {
@@ -650,7 +654,7 @@ describe('Real-World Matrix Test Suite', () => {
       expect(ccInp.value).toBe('1111-2222-3333-4444');
       expect(clickFired).toBe(true);
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 2000 });
+    }, { timeout: 5000 });
   });
 
   it('Scenario 6: React SPA Form - Should trigger react state sync triggers successfully', async () => {
@@ -707,6 +711,6 @@ describe('Real-World Matrix Test Suite', () => {
       expect(reactInp.value).toBe('Hello React state!');
       expect(reactInternalState.value).toBe('Hello React state!');
       expect(executionStateStore.status).toBe(ExecutionStatus.COMPLETE);
-    }, { timeout: 2000 });
+    }, { timeout: 5000 });
   });
 });

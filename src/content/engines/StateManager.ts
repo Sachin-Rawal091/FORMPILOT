@@ -10,7 +10,8 @@ export class StateManager {
     sessionId: string, 
     totalRows: number,
     recordingId?: string,
-    siteUrl?: string
+    siteUrl?: string,
+    tabContext: number = -1
   ): Promise<ExecutionState> {
     const currentState = await StorageManager.getExecutionState();
     
@@ -32,10 +33,11 @@ export class StateManager {
       pageRetryCount: 0,
       mutexLock: sessionId, // Set mutex lock
       captchaPending: false,
-      tabContext: -1,
+      tabContext,
       lastStepResult: "",
       recordingId: recordingId || undefined,
-      siteUrl: siteUrl || undefined
+      siteUrl: siteUrl || undefined,
+      currentUrl: window.location.href
     };
 
     await StorageManager.setExecutionState(newState);
@@ -49,16 +51,17 @@ export class StateManager {
     return StorageManager.getExecutionState();
   }
 
-  /**
-   * Updates specific fields in the current execution state.
-   */
   static async updateState(updates: Partial<ExecutionState>): Promise<ExecutionState> {
     const currentState = await StorageManager.getExecutionState();
     if (!currentState) {
       throw new Error("Cannot update state: No active session found in storage.");
     }
 
-    const updatedState = { ...currentState, ...updates };
+    const updatedState = { 
+      ...currentState, 
+      ...updates,
+      currentUrl: window.location.href // Keep currentUrl updated dynamically
+    };
     await StorageManager.setExecutionState(updatedState);
     return updatedState;
   }

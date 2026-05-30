@@ -8,6 +8,8 @@ export class ResponseDetectionEngine {
   private static captchaTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private static countdownIntervalId: ReturnType<typeof setInterval> | null = null;
 
+  private static activeCaptchaResolver: (() => void) | null = null;
+
   /**
    * Checks the DOM for CAPTCHA elements.
    */
@@ -393,18 +395,26 @@ export class ResponseDetectionEngine {
     }
 
     return new Promise<"SOLVED" | "TIMEOUT">((resolve) => {
+      const onResumeCallback = async () => {
+        // User Resumed
+        const stateAfter = await StateManager.getState();
+        if (stateAfter) {
+          await StateManager.updateState({
+            status: ExecutionStatus.RUNNING,
+            captchaPending: false
+          });
+        }
+        this.activeCaptchaResolver = null;
+        resolve("SOLVED");
+      };
+
+      this.activeCaptchaResolver = () => {
+        this.removeCaptchaOverlay();
+        onResumeCallback();
+      };
+
       this.injectCaptchaOverlay(
-        async () => {
-          // User Resumed
-          const stateAfter = await StateManager.getState();
-          if (stateAfter) {
-            await StateManager.updateState({
-              status: ExecutionStatus.RUNNING,
-              captchaPending: false
-            });
-          }
-          resolve("SOLVED");
-        },
+        onResumeCallback,
         async () => {
           // Timeout reached
           const stateAfter = await StateManager.getState();
@@ -414,9 +424,19 @@ export class ResponseDetectionEngine {
               captchaPending: false
             });
           }
+          this.activeCaptchaResolver = null;
           resolve("TIMEOUT");
         }
       );
     });
+  }
+
+  /**
+   * Programmatically resolves the pending CAPTCHA promise, typically called via background message.
+   */
+  static forceResolveCaptcha(): void {
+    if (this.activeCaptchaResolver) {
+      this.activeCaptchaResolver();
+    }
   }
 }

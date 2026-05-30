@@ -128,33 +128,63 @@ export class SmartWaitEngine {
   }
 
   /**
-   * Detects navigation requiring TWO signals simultaneously:
-   * URL change AND > 40% of document.body direct children replaced.
+   * Detects navigation by monitoring for URL change OR significant DOM mutations.
+   * Resolves on EITHER condition to handle:
+   * - Full page navigations (URL changes)
+   * - SPA router transitions (URL + minor DOM changes)
+   * - In-page wizard transitions (DOM-only, no URL change)
    */
   static async waitForURLChange(currentURL: string, timeout: number): Promise<boolean> {
     return new Promise((resolve) => {
       let timeoutTimer: ReturnType<typeof setTimeout>;
       let observer: MutationObserver;
+      let resolved = false;
       const initialChildrenCount = document.body.children.length;
+      let mutationCount = 0;
+
+      const done = (result: boolean) => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve(result);
+      };
 
       // Fallback polling for pushState/replaceState which don't fire events natively
       const pollInterval = setInterval(() => {
         if (window.location.href !== currentURL) {
-          checkCondition();
+          done(true);
         }
-      }, 500);
+      }, 300);
 
-      const checkCondition = () => {
-        const urlChanged = window.location.href !== currentURL;
-        const currentChildrenCount = document.body.children.length;
+      const checkURLChange = () => {
+        if (window.location.href !== currentURL) {
+          done(true);
+        }
+      };
+
+      const checkDOMMutation = () => {
+        mutationCount++;
         
-        // Calculate difference in direct children as a percentage
+        // If URL changed, resolve immediately
+        if (window.location.href !== currentURL) {
+          done(true);
+          return;
+        }
+
+        // Check for significant DOM body changes (section toggling, content replacement)
+        const currentChildrenCount = document.body.children.length;
         const diff = Math.abs(currentChildrenCount - initialChildrenCount);
         const thresholdMet = initialChildrenCount === 0 || (diff / initialChildrenCount) > NAVIGATION_DOM_THRESHOLD;
 
-        if (urlChanged && thresholdMet) {
-          cleanup();
-          resolve(true);
+        if (thresholdMet) {
+          done(true);
+          return;
+        }
+
+        // For SPA wizard-style transitions with many subtree mutations but same body children count
+        // (e.g., display:none toggling of sections), resolve after significant mutation activity
+        if (mutationCount >= 5) {
+          done(true);
         }
       };
 
@@ -162,21 +192,20 @@ export class SmartWaitEngine {
         if (observer) observer.disconnect();
         clearTimeout(timeoutTimer);
         clearInterval(pollInterval);
-        window.removeEventListener("popstate", checkCondition);
-        window.removeEventListener("hashchange", checkCondition);
+        window.removeEventListener("popstate", checkURLChange);
+        window.removeEventListener("hashchange", checkURLChange);
       };
 
       // Listen for URL changes
-      window.addEventListener("popstate", checkCondition);
-      window.addEventListener("hashchange", checkCondition);
+      window.addEventListener("popstate", checkURLChange);
+      window.addEventListener("hashchange", checkURLChange);
 
-      // Watch for DOM changes to evaluate threshold
-      observer = new MutationObserver(checkCondition);
-      observer.observe(document.body, { childList: true });
+      // Watch for DOM changes including subtree mutations (catches section toggling)
+      observer = new MutationObserver(checkDOMMutation);
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true });
 
       timeoutTimer = setTimeout(() => {
-        cleanup();
-        resolve(false); // Timeout reached without meeting conditions
+        done(false); // Timeout reached without meeting conditions
       }, timeout);
     });
   }

@@ -82,6 +82,7 @@ export interface ExecutionState {
   lastStepResult: string;
   recordingId?: string;
   siteUrl?: string;
+  currentUrl?: string;
 }
 
 export enum ExecutionStatus {
@@ -193,6 +194,7 @@ export enum MessageType {
   ADD_LOG_ENTRY,
   SET_EXECUTION_STATE,
   GET_EXECUTION_STATE,
+  CLEAR_BADGE,
 }
 
 export interface RecordingState {

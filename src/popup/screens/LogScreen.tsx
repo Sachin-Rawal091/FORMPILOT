@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useFormPilotStore } from '../store/useFormPilotStore';
 import { LogTable } from '../components/LogTable';
 import { LogEntry } from '../../types';
-import { getDB } from '../../storage/db';
+import { StorageManager } from '../../storage/StorageManager';
 
 export const LogScreen: React.FC = () => {
   const { executionState, recentLogs, loadLogs } = useFormPilotStore();
@@ -20,8 +20,7 @@ export const LogScreen: React.FC = () => {
       } else {
         // Find most recent sessionId in database
         try {
-          const db = await getDB();
-          const allLogs = await db.getAll('logs');
+          const allLogs = await StorageManager.getHistoricLogs();
           
           if (allLogs.length > 0) {
             // Sort by timestamp desc to find latest session

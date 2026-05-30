@@ -18,6 +18,16 @@
 
 ## Log
 
+### 2026-05-22 — Antigravity (Gemini)
+**Task:** Push code to GitHub repository and optimize .gitignore
+**Did:**
+* Drafted and updated a comprehensive, professional `.gitignore` to ignore build files, editor artifacts, diagnostic outputs, OS metadata, local environments, and agent temp files.
+* Executed pre-commit automated tests (`npm run test`), successfully verifying that all 92/92 Vitest unit/integration tests pass cleanly under happy-dom.
+* Staged and committed all pending workspace optimizations.
+* Rebases and resolved the non-fast-forward push rejection cleanly, then pushed the full production-ready code tree successfully to remote origin main.
+**Changed:** `.gitignore`, `agent_progess.md`, `agent_log.md`, `agent_handoff.md`.
+**Next:** Proceed with production build check & final polish (Weeks 15–16 tasks) to prepare for packaged submission.
+
 ### 2026-05-21 — Antigravity (Gemini)
 **Task:** Debug and fix automated filling not starting and progress stuck at 0% when updating data
 **Did:** 
@@ -204,10 +214,36 @@
 * Restarted the background mock server (`scratch/server.js`) on port 8080.
 * Re-provided the direct manual testing links: KRP Portal (`http://localhost:8080/krp`) and Base Test Page (`http://localhost:8080/`).
 **Changed:** None.
-**Next:** Proceed with manual verification or Chrome Web Store launch documentation.
+### 2026-05-29 — Antigravity (Gemini)
+**Task:** Complete live end-to-end multi-page automation verification in Chrome.
+**Did:** 
+* Rebuilt the Chrome Extension bundle (`npm run build`) with zero compiler errors/warnings.
+* Increased the per-row execution budget in `run_live_demo_v3.js` to a resilient **55s per row** (total budget ~10 mins) to handle realistic Indian registration multi-page transitions.
+* Executed the automated live Chrome verification script under Puppeteer.
+* Successfully automated all **10/10 Excel rows** live on Chrome, achieving **100% success rate** in 521.0s. All rows correctly completed, dismissed success overlays, and wrote to IndexedDB.
+**Changed:** `run_live_demo_v3.js`, `agent_progess.md`, `agent_log.md`, `agent_handoff.md`.
+**Next:** Proceed with final Web Store packaging and submission check (Weeks 15–16 tasks).
+
+### 2026-05-29 — Antigravity (Gemini)
+**Task:** Fix manual Excel upload automation progress reset loop bug.
+**Did:** 
+* **Diagnosed:** Found that when in-page resets triggered page-level fallback reloads, the script re-instantiation called `checkAutoResume()`, which triggered `this.start()`. This called `StateManager.initializeSession()` which unconditionally cleared active progress (`currentRowIndex: 0`). This reset progress to 0 on reload, trapping the manual execution in an infinite loop repeating Row 1 and Row 2. Also found that `state.currentUrl` was never updated after initial setup, causing routing mismatches.
+* **Fixed:** Added an `isResume` guard inside `executor.ts:start()` to safely reuse active progress indices if `sessionId` matches, skipping the destructive `initializeSession()` call. Updated `StateManager.ts:updateState()` to dynamically save `currentUrl` as `window.location.href` on every step transition.
+* **Verified:** Rebuilt cleanly in 709ms and ran the Vitest suite achieving **100% green status (92/92 tests passing perfectly)**.
+**Changed:** `src/content/executor.ts`, `src/content/engines/StateManager.ts`, `agent_progess.md`, `agent_log.md`, `agent_handoff.md`.
+**Next:** Proceed with final Web Store packaging and submission check (Weeks 15–16 tasks).
 
 
-
+### 2026-05-30 — Antigravity (Gemini)
+**Task:** Fix multi-page wizard stalling bug where automation gets stuck after filling page 1 and transitioning to page 2.
+**Did:** 
+* **Root-cause analysis:** Identified 3 contributing causes: (1) `resetFormBetweenRows()` single-check element detection with too-short window, falling through to destructive `window.location.reload()`, (2) No post-click DOM stability wait after button clicks that trigger SPA wizard section toggles, (3) `waitForURLChange` overly strict dual-condition (URL change AND >40% DOM change) that always times out on SPA wizards.
+* **Fixed `executor.ts`:** Added DOM stability waits after navigation-like button clicks, added retry loop (3 attempts with visibility verification) in `resetFormBetweenRows`, added DOM stability wait between rows.
+* **Fixed `ExecutionEngine.ts`:** Added 300ms post-click delay for button/link/role=button elements.
+* **Fixed `SmartWaitEngine.ts`:** Rewrote `waitForURLChange` to resolve on EITHER URL change OR DOM mutations (subtree+attributes), with mutation count threshold for SPA wizard detection.
+* **Verified:** 92/92 tests pass, 0 TS errors, production build 862ms.
+**Changed:** `src/content/executor.ts`, `src/content/engines/ExecutionEngine.ts`, `src/content/engines/SmartWaitEngine.ts`, `agent_progess.md`, `agent_log.md`, `agent_handoff.md`.
+**Next:** Manual re-test on the KRP portal to verify the fix. Then proceed with final Web Store packaging.
 
 
 

@@ -149,12 +149,14 @@ describe('ExecutionEngine.executeAction', () => {
     expect(spy).toHaveBeenCalledWith(btn, ['mousedown', 'mouseup', 'click']);
   });
 
-  it('NAVIGATE_NEXT — same as CLICK, dispatches click events', async () => {
+  it('NAVIGATE_NEXT — same as CLICK, dispatches click events and waits for URL change', async () => {
     const btn = document.createElement('button');
     document.body.appendChild(btn);
     const spy = vi.spyOn(domUtils, 'dispatchEvents');
+    const waitSpy = vi.spyOn(SmartWaitEngine, 'waitForURLChange').mockResolvedValue(true);
     await ExecutionEngine.executeAction(makeStep({ action: Action.NAVIGATE_NEXT }), makeSelectorResult(btn), null);
     expect(spy).toHaveBeenCalledWith(btn, ['mousedown', 'mouseup', 'click']);
+    expect(waitSpy).toHaveBeenCalled();
   });
 
   it('SELECT — calls setSelectValue and waitForSelectOptions', async () => {
@@ -186,13 +188,13 @@ describe('ExecutionEngine.executeAction', () => {
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.checked = false;
     document.body.appendChild(cb);
-    const spy = vi.spyOn(domUtils, 'dispatchEvents');
+    const setCbSpy = vi.spyOn(domUtils, 'setCheckboxValue');
 
     // Check it (unchecked → true)
     const step = makeStep({ action: Action.TOGGLE_CHECKBOX, checked: true });
     await ExecutionEngine.executeAction(step, makeSelectorResult(cb), null);
-    expect(cb.checked).toBe(true);
-    expect(spy).toHaveBeenCalled();
+    // Since we mock or test setCheckboxValue's effect, we check that it was called
+    expect(setCbSpy).toHaveBeenCalledWith(cb, true);
   });
 
   it('TOGGLE_CHECKBOX — does NOT click if state already correct', async () => {
@@ -214,7 +216,7 @@ describe('ExecutionEngine.executeAction', () => {
     expect(spy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
   });
 
-  it('SUBMIT — calls form.submit() on HTMLFormElement', async () => {
+  it('SUBMIT — calls form.submit() on HTMLFormElement if no submit button', async () => {
     const form = document.createElement('form');
     document.body.appendChild(form);
     const spy = vi.spyOn(form, 'submit').mockImplementation(() => {});

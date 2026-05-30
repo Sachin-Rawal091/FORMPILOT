@@ -16,17 +16,13 @@ import { SmartWaitEngine } from "./engines/SmartWaitEngine";
 import { SelectorEngine } from "./engines/SelectorEngine";
 import { ResponseDetectionEngine } from "./engines/ResponseDetectionEngine";
 import { 
-  CHECKPOINT_INTERVAL, 
   MAX_PAGE_RETRIES, 
-  STEP_DELAY 
+  STEP_DELAY,
+  EXCEL_CHUNK_SIZE,
+  POST_ROW_DELAY_MS,
+  POST_SUBMIT_SETTLE_MS,
+  WAIT_DOM_STABLE_TIMEOUT
 } from "../shared/constants";
-
-// Delay after row completion before resetting the form for the next row (ms).
-// Gives the user and UI time to see the submission result.
-const POST_ROW_DELAY_MS = 2500;
-
-// Time to wait for success modals/overlays to appear after the last step (ms).
-const POST_SUBMIT_SETTLE_MS = 1500;
 
 export class Executor {
   private isRunning = false;
@@ -43,11 +39,36 @@ export class Executor {
   private async checkAutoResume() {
     // Wait a bit to ensure state is settled from any background syncs
     await new Promise(r => setTimeout(r, 500));
+    
+    // Guard: Do not resume if execution has already been actively triggered via messages
+    if (this.isRunning) {
+      console.log("[Executor] checkAutoResume: Execution already running, skipping auto-resume.");
+      return;
+    }
+    
     try {
       const state = await StateManager.getState();
       if (state && state.status === ExecutionStatus.RUNNING && state.recordingId && state.sessionId) {
-        // Only resume if we are still on the same site/domain
-        if (state.siteUrl) {
+        // Only resume if we are still on the same site/domain and roughly the same path
+        if (state.currentUrl) {
+          try {
+            const currentUrlObj = new URL(window.location.href);
+            const stateUrlObj = new URL(state.currentUrl);
+            
+            if (currentUrlObj.hostname !== stateUrlObj.hostname || currentUrlObj.pathname !== stateUrlObj.pathname) {
+              console.log(`[Executor] Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
+              
+              // If we're on the same domain but wrong path, try to navigate back to the expected path
+              if (currentUrlObj.hostname === stateUrlObj.hostname) {
+                console.log(`[Executor] Redirecting to correct path for auto-resume: ${state.currentUrl}`);
+                window.location.href = state.currentUrl;
+                return; // Will auto-resume on the new page
+              }
+              
+              return;
+            }
+          } catch(e) {}
+        } else if (state.siteUrl) {
           try {
             const siteHost = new URL(state.siteUrl).hostname;
             if (!window.location.hostname.includes(siteHost)) {
@@ -70,7 +91,7 @@ export class Executor {
       switch (message.type) {
         case MessageType.START_EXECUTION:
           const payload = message.payload as { recordingId: string; sessionId: string };
-          this.start(payload?.recordingId, payload?.sessionId || message.sessionId);
+          this.start(payload?.recordingId, payload?.sessionId || message.sessionId, message.tabId);
           break;
         case MessageType.PAUSE_EXECUTION:
           this.pause();
@@ -125,7 +146,7 @@ export class Executor {
 
   // ─── INITIAL START ──────────────────────────────────────────────────
 
-  async start(recordingId: string, sessionId: string) {
+  async start(recordingId: string, sessionId: string, tabId: number = -1) {
     if (this.isRunning) {
       console.warn("Executor is already running.");
       return;
@@ -167,17 +188,25 @@ export class Executor {
       }
       const totalRows = countRes.count;
 
-      // 3. Mutex check and state initialization — includes
-      //    recordingId and siteUrl for reference.
-      const state = await StateManager.initializeSession(
-        this.sessionId, 
-        totalRows,
-        recordingId,
-        this.siteUrl
-      );
-      console.log("FormPilot Session initialized with state:", state);
+      // 3. Mutex check and state initialization
+      let state;
+      const isResume = currentState && currentState.sessionId === sessionId && currentState.status === ExecutionStatus.RUNNING;
+      
+      if (isResume) {
+        state = currentState;
+        console.log("[Executor] Re-using existing active session state for auto-resume:", state);
+      } else {
+        state = await StateManager.initializeSession(
+          this.sessionId, 
+          totalRows,
+          recordingId,
+          this.siteUrl,
+          tabId
+        );
+        console.log("FormPilot Session initialized with state:", state);
+      }
 
-      // Send initial state update (status is RUNNING from initializeSession)
+      // Send initial state update (status is RUNNING)
       this.broadcastStateUpdate(state);
 
       // 4. Start the main execution loop
@@ -198,7 +227,6 @@ export class Executor {
   private async runAllRows(totalRows: number) {
     let state = (await StateManager.getState()) || this.createFallbackState(totalRows);
 
-    const CHUNK_SIZE = 50;
     let excelRows: ExcelRow[] = [];
     let currentChunkOffset = -1;
 
@@ -206,11 +234,11 @@ export class Executor {
       if (!this.isRunning) break;
 
       // Load chunk if needed
-      const neededChunkOffset = Math.floor(rowIdx / CHUNK_SIZE) * CHUNK_SIZE;
+      const neededChunkOffset = Math.floor(rowIdx / EXCEL_CHUNK_SIZE) * EXCEL_CHUNK_SIZE;
       if (currentChunkOffset !== neededChunkOffset) {
         const chunkRes = await this.safeSendMessage({
           type: MessageType.GET_EXCEL_DATA,
-          payload: { offset: neededChunkOffset, limit: CHUNK_SIZE },
+          payload: { offset: neededChunkOffset, limit: EXCEL_CHUNK_SIZE },
           sessionId: this.sessionId,
           timestamp: Date.now()
         }, 5000);
@@ -281,6 +309,8 @@ export class Executor {
       if (rowIdx + 1 < totalRows && this.isRunning) {
         console.log(`[Executor] Resetting form for row ${rowIdx + 2}...`);
         await this.resetFormBetweenRows();
+        // After reset, wait for DOM to fully stabilize before starting next row
+        await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
       }
     }
 
@@ -304,24 +334,39 @@ export class Executor {
     const dismissed = await this.dismissSuccessUI();
     
     if (dismissed) {
-      // Wait for form to reset after dismissal
-      await new Promise(r => setTimeout(r, 1000));
+      // Wait for form to reset after dismissal and DOM to stabilize
+      await new Promise(r => setTimeout(r, 1500));
+      await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
       
-      // Check if the first form element is now available
+      // Check if the first form element is now available — retry up to 3 times with increasing waits
       const firstStep = this.recordingSteps[0];
       if (firstStep) {
-        const formReady = SelectorEngine.findElement(firstStep.selectorMeta, firstStep.selector);
-        if (formReady) {
-          console.log("[Executor] Form reset successful, ready for next row.");
-          return;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const formReady = SelectorEngine.findElement(firstStep.selectorMeta, firstStep.selector);
+          if (formReady) {
+            // Also verify the element is actually visible (not hidden in an inactive section)
+            const el = formReady.element as HTMLElement;
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            if (rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden") {
+              console.log(`[Executor] Form reset successful (attempt ${attempt + 1}), ready for next row.`);
+              return;
+            }
+          }
+          // Wait progressively longer between checks (500ms, 1000ms, 1500ms)
+          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
         }
+      } else {
+        // No recorded steps to verify against, just proceed
+        console.log("[Executor] No first step to verify, proceeding.");
+        return;
       }
     }
 
-    // 3. Fallback: reload the page to get a clean form
-    console.log("[Executor] In-page reset failed, reloading page...");
+    // 3. Fallback: navigate to original siteUrl to get a clean form
+    console.log("[Executor] In-page reset failed, navigating to start URL...");
     
-    // Save state to service worker before reload
+    // Save state to service worker before navigation
     const state = await StateManager.getState();
     if (state) {
       await this.safeSendMessage({
@@ -332,14 +377,17 @@ export class Executor {
       }, 5000);
     }
 
-    // Reload and wait for the page to settle
-    window.location.reload();
-    
-    // After reload, this executor instance is destroyed.
-    // We won't reach here. The page reload creates a fresh content script.
-    // To handle this case, we'd need auto-resume. But for now, the in-page
-    // reset should handle most cases. If it doesn't, we fall through here.
-    await new Promise(r => setTimeout(r, 10000)); // Safety net
+    if (this.siteUrl && window.location.href !== this.siteUrl) {
+      window.location.href = this.siteUrl;
+      // After navigation, this executor instance is destroyed.
+      // The auto-resume logic will pick up execution on the new page.
+      await new Promise(r => setTimeout(r, 10000)); // Safety net
+    } else {
+      // If we are already on the siteUrl and it's an SPA, try history or fallback to reload
+      console.log("[Executor] Already at start URL, forcing reload as last resort.");
+      window.location.reload();
+      await new Promise(r => setTimeout(r, 10000)); // Safety net
+    }
   }
 
   /**
@@ -433,6 +481,28 @@ export class Executor {
       // Human-like pacing delay
       await new Promise(r => setTimeout(r, STEP_DELAY));
 
+      // After navigation/page-transition clicks, wait for DOM to stabilize before proceeding
+      // This handles SPA wizard transitions where sections toggle visibility
+      if (stepIndex > 0) {
+        const prevStep = this.recordingSteps[stepIndex - 1];
+        if (prevStep && (prevStep.action === Action.CLICK || prevStep.action === Action.NAVIGATE_NEXT)) {
+          const prevEl = SelectorEngine.findElement(prevStep.selectorMeta, prevStep.selector);
+          if (prevEl) {
+            const tagName = (prevEl.element as HTMLElement).tagName?.toLowerCase();
+            const textContent = (prevEl.element as HTMLElement).textContent?.toLowerCase() || '';
+            const isNavigationClick = tagName === 'button' || tagName === 'a' || 
+              (prevEl.element as HTMLElement).getAttribute('role') === 'button' ||
+              textContent.includes('next') || textContent.includes('continue') || 
+              textContent.includes('submit') || textContent.includes('proceed');
+            
+            if (isNavigationClick || prevStep.action === Action.NAVIGATE_NEXT) {
+              console.log(`[Executor] Post-navigation DOM stability wait after step: ${prevStep.id}`);
+              await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
+            }
+          }
+        }
+      }
+
       // Mid-step CAPTCHA Check
       const captchaResult = await ResponseDetectionEngine.handleCaptchaIfPresent(this.sessionId);
       if (captchaResult === "TIMEOUT") {
@@ -447,7 +517,7 @@ export class Executor {
 
       if (res.success) {
         // Step completed successfully (or optionally skipped)
-        const logStatus = (res.resolvedStatus as LogStatus) || "FILLED";
+        const logStatus: LogStatus = (res.resolvedStatus as LogStatus) || "FILLED";
         const resultType = logStatus === "STEP_SKIPPED" ? StepResult.SKIPPED : StepResult.SUCCESS;
 
         await this.safeSendMessage({
@@ -509,11 +579,12 @@ export class Executor {
 
         stepIndex++;
         
-        // 3. Save periodic state Checkpoint
-        if (stepIndex % CHECKPOINT_INTERVAL === 0) {
-          state = await StateManager.updateState({ currentStepIndex: stepIndex });
-          this.broadcastStateUpdate(state);
-        }
+        // 3. Save state Checkpoint after every successful step
+        state = await StateManager.updateState({ 
+          currentStepIndex: stepIndex,
+          lastStepResult: res.resolvedStatus || "SUCCESS"
+        });
+        this.broadcastStateUpdate(state);
 
       } else {
         // Step execution failed after retries
@@ -600,7 +671,7 @@ export class Executor {
       timestamp: Date.now()
     }, 2000);
 
-    return finalOutcome === "SUCCESS" || finalOutcome === "UNKNOWN" ? "SUCCESS" : "FAILED";
+    return finalOutcome === "SUCCESS" ? "SUCCESS" : "FAILED";
   }
 
   // ─── COMPLETION ────────────────────────────────────────────────────
@@ -636,11 +707,15 @@ export class Executor {
     this.isPaused = false;
     // Broadcast message to Service Worker so badge clears immediately on resume
     chrome.runtime.sendMessage({
-      type: MessageType.RESUME_EXECUTION,
+      type: MessageType.CLEAR_BADGE,
       sessionId: this.sessionId,
       payload: {},
       timestamp: Date.now()
     }).catch(() => {});
+    
+    // Resolve any pending CAPTCHA promise
+    ResponseDetectionEngine.forceResolveCaptcha();
+    
     console.log("Executor resumed.");
   }
 

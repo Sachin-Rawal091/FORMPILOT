@@ -1,5 +1,5 @@
 import { SelectorMeta, SelectorResult, SelectorStrategy } from "../../types";
-import { SHADOW_TRAVERSAL_LIMIT } from "../../shared/constants";
+import { SHADOW_TRAVERSAL_LIMIT, MIN_SELECTOR_CONFIDENCE } from "../../shared/constants";
 
 /**
  * 8-layer fallback Selector Engine
@@ -10,72 +10,82 @@ export class SelectorEngine {
    * Returns the first match that exceeds the confidence threshold, or null if none found.
    */
   static findElement(meta: SelectorMeta, selector: string): SelectorResult | null {
+    let bestResult: SelectorResult | null = null;
+
+    const evaluateResult = (result: SelectorResult | null) => {
+      if (result && result.confidence >= MIN_SELECTOR_CONFIDENCE) {
+        if (!bestResult || result.confidence > bestResult.confidence) {
+          bestResult = result;
+        }
+      }
+    };
 
     // 1. ID (1.0 confidence)
     if (meta.id) {
       const el = document.getElementById(meta.id);
-      if (el) return { element: el, strategy: SelectorStrategy.ID, confidence: 1.0, shadow: false };
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.ID, confidence: 1.0, shadow: false });
     }
 
     // If a raw selector is provided, try that as well with high confidence (e.g. primary captured selector)
-    if (selector) {
+    if (selector && !bestResult) {
       try {
         const el = document.querySelector(selector);
-        if (el) return { element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.95, shadow: false };
+        if (el) evaluateResult({ element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.95, shadow: false });
       } catch (e) {
         // ignore invalid selector
       }
     }
 
     // 2. Name (0.9 confidence)
-    if (meta.name) {
+    if (meta.name && !bestResult) {
       const el = document.querySelector(`[name="${CSS.escape(meta.name)}"]`);
-      if (el) return { element: el, strategy: SelectorStrategy.NAME, confidence: 0.9, shadow: false };
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.NAME, confidence: 0.9, shadow: false });
     }
 
     // 3. Aria-label (0.85 confidence)
-    if (meta.ariaLabel) {
+    if (meta.ariaLabel && !bestResult) {
       const el = document.querySelector(`[aria-label="${CSS.escape(meta.ariaLabel)}"]`);
-      if (el) return { element: el, strategy: SelectorStrategy.ARIA_LABEL, confidence: 0.85, shadow: false };
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.ARIA_LABEL, confidence: 0.85, shadow: false });
     }
 
     // 4. Label-linked (0.8 confidence)
-    // Try label linked by text if available
-    if (meta.labelText) {
+    if (meta.labelText && !bestResult) {
       const labels = Array.from(document.querySelectorAll("label"));
       const matchingLabel = labels.find((l) => l.textContent?.trim() === meta.labelText);
       if (matchingLabel) {
         const targetId = matchingLabel.getAttribute("for");
         if (targetId) {
           const el = document.getElementById(targetId);
-          if (el) return { element: el, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false };
+          if (el) evaluateResult({ element: el, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false });
         }
-        // or check if input is nested inside label
-        const nestedInput = matchingLabel.querySelector("input, select, textarea");
-        if (nestedInput) {
-          return { element: nestedInput, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false };
+        if (!bestResult) {
+          // check if input is nested inside label
+          const nestedInput = matchingLabel.querySelector("input, select, textarea");
+          if (nestedInput) {
+            evaluateResult({ element: nestedInput, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false });
+          }
         }
       }
     }
 
     // 5. Placeholder (0.7 confidence)
-    if (meta.placeholder) {
+    if (meta.placeholder && !bestResult) {
       const el = document.querySelector(`[placeholder="${CSS.escape(meta.placeholder)}"]`);
-      if (el) return { element: el, strategy: SelectorStrategy.PLACEHOLDER, confidence: 0.7, shadow: false };
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.PLACEHOLDER, confidence: 0.7, shadow: false });
     }
 
     // 6. CSS Path (0.5 confidence)
-    if (meta.cssPath) {
+    if (meta.cssPath && !bestResult) {
       try {
         const el = document.querySelector(meta.cssPath);
-        if (el) return { element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.5, shadow: false };
+        if (el) evaluateResult({ element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.5, shadow: false });
       } catch (e) {
         // ignore invalid selector
       }
     }
 
     // 7. XPath (0.4 confidence)
-    if (meta.xpath) {
+    if (meta.xpath && !bestResult) {
       try {
         const result = document.evaluate(
           meta.xpath,
@@ -85,12 +95,12 @@ export class SelectorEngine {
           null
         );
         if (result.singleNodeValue) {
-          return {
+          evaluateResult({
             element: result.singleNodeValue as Element,
             strategy: SelectorStrategy.XPATH,
             confidence: 0.4,
             shadow: false,
-          };
+          });
         }
       } catch (e) {
         // ignore invalid xpath
@@ -98,13 +108,14 @@ export class SelectorEngine {
     }
 
     // 8. Shadow DOM (0.6 confidence)
-    // We search across all shadow roots recursively, up to SHADOW_TRAVERSAL_LIMIT
-    const shadowMatch = this.findInShadowDOM(meta, selector);
-    if (shadowMatch) {
-      return shadowMatch;
+    if (!bestResult) {
+      const shadowMatch = this.findInShadowDOM(meta, selector);
+      if (shadowMatch) {
+        evaluateResult(shadowMatch);
+      }
     }
 
-    return null;
+    return bestResult;
   }
 
   private static findInShadowDOM(

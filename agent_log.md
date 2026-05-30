@@ -1,5 +1,15 @@
 # FormPilot — Session Log
 
+## Session — 2026-05-22 (Repository Hygiene & Push to GitHub)
+- **Model:** Gemini 3.5 Flash (High) (Antigravity)
+- **Scope:** Repository optimization, gitignore expansion, and syncing to remote GitHub repository.
+- **Findings:** The local `.gitignore` was basic (only ignoring node_modules and dist). Added comprehensive exclusions (IDE config, diagnostics, logs, OS metadata, local environment configs, and agent caches) to guarantee repository hygiene.
+- **Actions taken:**
+  - Expanded and wrote a professional `.gitignore` file with full file exclusions.
+  - Ran pre-commit test validation using `npm run test`, confirming 92/92 tests pass successfully with 100% green status.
+  - Staged, committed, pulled remote changes via `git pull --rebase` to resolve branch non-fast-forward divergence, and pushed the complete codebase successfully to `https://github.com/Sachin-Rawal091/FORMPILOT.git`.
+- **Verification:** Git workspace verified as clean, remote main branch updated successfully.
+
 ## Session — 2026-05-21 (Storage Session Access Fix)
 - **Model:** Gemini 3.5 Flash (High) (Antigravity)
 - **Scope:** Bug fix for content script execution block
@@ -260,10 +270,45 @@
   - Diagnosed that the background HTTP mock portal server was stopped due to an agent restart.
   - Restarted the background server on port 8080 running `scratch/server.js`.
   - Re-provided manual localhost links for testing: `http://localhost:8080/krp` (4-step wizard) and `http://localhost:8080/` (test page).
-- **Next:** Proceed with manual verification or Chrome Web Store launch documentation.
+## Session 22 — 2026-05-29 (End-to-End Live Chrome Verification)
+- **Model:** Gemini 3.5 Flash (High) (Antigravity)
+- **Scope:** E2E multi-page registration wizard automation verification on Chrome.
+- **Findings:** Verified that the 30-35s per-row timeout budget in `run_live_demo_v3.js` was too tight for realistic progressive wizard transitions (~50s per row).
+- **Actions taken:**
+  - Rebuilt the Chrome Extension bundle (`npm run build`) cleanly with zero TypeScript errors or warnings.
+  - Updated `run_live_demo_v3.js` to expand the estimated row time to a robust **55s per row** (total budget ~10 mins).
+  - Executed `run_live_demo_v3.js` as a background Puppeteer script.
+  - Successfully automated all **10/10 Excel rows** live on Chrome through the 4-step wizard, achieving a **100% success rate** in 521.0s. All rows correctly completed, dismissed success overlays, and wrote progress to IndexedDB.
+- **Verification:** 10/10 success count confirmed by IndexedDB check. Screenshots saved to `live_demo_screenshots/`.
 
+- **Next:** Proceed with final Web Store packaging and submission check (Weeks 15–16 tasks).
 
+## Session 23 — 2026-05-29 (Manual Upload Reset Loop Bug Fix)
+- **Model:** Gemini 3.5 Flash (High) (Antigravity)
+- **Scope:** Bug fix for manual Excel execution progress reset loop.
+- **Findings:**
+  - Diagnosed that during manual execution transitions where in-page form element checks took slightly longer than 1s, the page fallback reloaded. On reload, `checkAutoResume()` triggered `this.start()`, which called `StateManager.initializeSession()`.
+  - `initializeSession()` was unconditionally overwriting the session state inside storage and resetting `currentRowIndex` back to `0`, causing the runner to repeat Row 1 and Row 2 in an infinite loop instead of progressing to Row 3.
+  - Also found that `state.currentUrl` was never updated after initial initialization, which would cause the auto-resume validation router to mismatch on reloads.
+- **Actions taken:**
+  - Added an `isResume` guard inside `executor.ts:start()` to cleanly reuse the active session's state and indices if the `sessionId` matches, skipping the destructive `initializeSession()` call.
+  - Updated `StateManager.ts:updateState()` to dynamically save `currentUrl` as `window.location.href` on every state checkpoint to ensure resilient reload routing.
+  - Rebuilt the Chrome Extension (`npm run build`) cleanly in 709ms.
+  - Ran the entire test suite (`npm run test`), successfully verifying that all **92/92 unit, integration, and real-world matrix tests** pass cleanly with 100% success.
+- **Verification:** Completed full compiling and test run validation. Stored progress logs in IndexedDB.
 
+## Session 24 — 2026-05-30 (Multi-Page Wizard Stalling Fix)
+- **Model:** Gemini (Antigravity)
+- **Scope:** Root-cause analysis and fix for automation stalling during multi-page wizard transitions.
+- **Findings:**
+  - **Root Cause 1:** `resetFormBetweenRows()` had only a single check (no retry) for the first step element after dismissing the success overlay. If the DOM hadn't fully stabilized in the 1s window, it fell through to `window.location.reload()`, destroying the JS context.
+  - **Root Cause 2:** `Action.CLICK` on button/link elements that trigger SPA wizard section toggles (display:none→block) had no post-click DOM stability wait, causing the next step to attempt element finding before the transition completed.
+  - **Root Cause 3:** `waitForURLChange` required BOTH a URL change AND >40% body children change simultaneously. SPA wizards that toggle sections without URL changes would always timeout after 15 seconds.
+- **Actions taken:**
+  - **`executor.ts`:** Added post-navigation DOM stability waits after button/link CLICK actions. Added DOM stability wait between rows after reset. Improved `resetFormBetweenRows()` with a 3-attempt retry loop for first-element visibility verification (checks `BoundingClientRect` and `computedStyle`), increased post-dismiss wait to 1.5s with DOM stability check.
+  - **`ExecutionEngine.ts`:** Added a 300ms post-click delay for button/link/role=button elements to let wizard transitions complete.
+  - **`SmartWaitEngine.ts`:** Rewrote `waitForURLChange` to resolve on EITHER URL change OR significant DOM mutations (removed the strict dual-condition requirement). Added subtree+attributes observation for section toggling detection. Added mutation count threshold (≥5 mutations) to detect SPA wizard transitions without URL changes.
+- **Verification:** 92/92 tests pass (0 regressions), 0 TypeScript errors, production build in 862ms.
 
 
 

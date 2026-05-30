@@ -31,6 +31,22 @@ export function dispatchEvents(element: Element, eventTypes: string[]): void {
 }
 
 /**
+ * Sets the value of a checkbox element, bypassing React's value setter overloads.
+ */
+export function setCheckboxValue(input: HTMLInputElement, checked: boolean): void {
+  const nativeCheckboxValueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "checked"
+  )?.set;
+
+  if (nativeCheckboxValueSetter) {
+    nativeCheckboxValueSetter.call(input, checked);
+  } else {
+    input.checked = checked;
+  }
+  dispatchEvents(input, ["change", "click"]);
+}
+/**
  * Sets the value of an input element, bypassing React's value setter overloads.
  * This is crucial for filling out React/Vue controlled forms.
  */
