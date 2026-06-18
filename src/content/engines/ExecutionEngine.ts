@@ -3,6 +3,7 @@ import { setInputValue, setSelectValue, setTextareaValue, setCheckboxValue, disp
 import { SmartWaitEngine } from "./SmartWaitEngine";
 import { WAIT_ELEMENT_TIMEOUT, WAIT_DOM_STABLE_TIMEOUT } from "../../shared/constants";
 import { StorageManager } from "../../storage/StorageManager";
+import { logger } from "../../utils/logger";
 
 export interface ResolvedValueResult {
   value: string | null;
@@ -196,10 +197,10 @@ export class ExecutionEngine {
               el.files = dataTransfer.files;
               dispatchEvents(el, ["change", "input"]);
             } else {
-              console.warn(`File blob not found for alias: ${resolvedValue}`);
+              logger.warn('ExecutionEngine', `File blob not found for alias: ${resolvedValue}`);
             }
           } catch (e) {
-            console.error(`Failed to inject file blob for ${resolvedValue}`, e);
+            logger.error('ExecutionEngine', `Failed to inject file blob for ${resolvedValue}`, e);
           }
         }
         break;
@@ -212,7 +213,7 @@ export class ExecutionEngine {
         break;
 
       case Action.MANUAL_IFRAME:
-        console.log(`Pausing for manual iframe interaction on step ${step.id}`);
+        logger.info('ExecutionEngine', `Pausing for manual iframe interaction on step ${step.id}`);
         // executor.ts will handle the pause + popup logic
         break;
 

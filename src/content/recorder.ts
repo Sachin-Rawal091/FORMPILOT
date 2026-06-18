@@ -1,5 +1,6 @@
 import { Step, Action, SelectorMeta, FormPilotMessage, MessageType } from "../types";
 import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS } from "../shared/constants";
+import { logger } from "../utils/logger";
 
 class RecordingEngine {
   private isRecording = false;
@@ -22,18 +23,18 @@ class RecordingEngine {
           this.isRecording = true;
           this.recordingId = (message.payload as { recordingId: string })?.recordingId || "default";
           this.currentStepIndex = 0;
-          console.log(`FormPilot Recording started for session ID: ${message.sessionId}, recordingId: ${this.recordingId}`);
+          logger.info('Recorder', `Recording started for session ID: ${message.sessionId}, recordingId: ${this.recordingId}`);
           break;
         case MessageType.STOP_RECORDING:
           this.isRecording = false;
-          console.log("FormPilot Recording stopped.");
+          logger.info('Recorder', 'Recording stopped.');
           break;
       }
     });
   }
 
   private restoreRecordingState() {
-    console.log("RecordingEngine: Attempting to restore recording state via GET_STATUS...");
+    logger.debug('Recorder', 'Attempting to restore recording state via GET_STATUS...');
     try {
       chrome.runtime.sendMessage({
         type: MessageType.GET_STATUS,
@@ -42,13 +43,13 @@ class RecordingEngine {
         timestamp: Date.now()
       }, (response) => {
         if (chrome.runtime.lastError) {
-          console.warn("RecordingEngine: GET_STATUS failed:", chrome.runtime.lastError.message);
+          logger.warn('Recorder', 'GET_STATUS failed:', chrome.runtime.lastError.message);
           return;
         }
-        console.log("RecordingEngine: GET_STATUS response received:", JSON.stringify(response));
+        logger.debug('Recorder', 'GET_STATUS response received:', JSON.stringify(response));
         if (response && response.recordingState) {
           const state = response.recordingState;
-          console.log("RecordingEngine: Recording state from SW:", JSON.stringify({
+          logger.debug('Recorder', 'Recording state from SW:', JSON.stringify({
             isRecording: state.isRecording,
             recordingId: state.recordingId,
             stepCount: state.activeRecordingSteps?.length,
@@ -58,16 +59,16 @@ class RecordingEngine {
             this.isRecording = true;
             this.recordingId = state.recordingId || "default";
             this.currentStepIndex = state.activeRecordingSteps ? state.activeRecordingSteps.length : 0;
-            console.log(`RecordingEngine: ✅ Restored recording state. isRecording: true, recordingId: ${this.recordingId}, stepIndex: ${this.currentStepIndex}`);
+            logger.info('Recorder', `Restored recording state. isRecording: true, recordingId: ${this.recordingId}, stepIndex: ${this.currentStepIndex}`);
           } else {
-            console.log("RecordingEngine: Recording state exists but isRecording is false.");
+            logger.debug('Recorder', 'Recording state exists but isRecording is false.');
           }
         } else {
-          console.log("RecordingEngine: No recording state in response.");
+          logger.debug('Recorder', 'No recording state in response.');
         }
       });
     } catch (err) {
-      console.error("RecordingEngine: Error sending GET_STATUS:", err);
+      logger.error('Recorder', 'Error sending GET_STATUS:', err);
     }
   }
 
@@ -88,7 +89,7 @@ class RecordingEngine {
     window.addEventListener("popstate", () => this.handleNavigationEvent());
     window.addEventListener("hashchange", () => this.handleNavigationEvent());
     
-    console.log("RecordingEngine: DOM event listeners attached.");
+    logger.debug('Recorder', 'DOM event listeners attached.');
   }
 
   private handleNavigationEvent() {
@@ -107,7 +108,7 @@ class RecordingEngine {
     const el = e.target as HTMLElement;
     if (!el) return;
 
-    console.log(`RecordingEngine: Click event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} type=${el.getAttribute('type') || 'none'}`);
+    logger.debug('Recorder', `Click event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} type=${el.getAttribute('type') || 'none'}`);
 
     // Filter out inputs that we handle via change or input listeners to prevent double capturing
     const tagName = el.tagName.toLowerCase();
@@ -152,7 +153,7 @@ class RecordingEngine {
     const el = e.target as HTMLElement;
     if (!el) return;
 
-    console.log(`RecordingEngine: Input event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} isRecording=${this.isRecording}`);
+    logger.debug('Recorder', `Input event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} isRecording=${this.isRecording}`);
 
     const tagName = el.tagName.toLowerCase();
     const typeAttr = el.getAttribute("type")?.toLowerCase() || "";
@@ -252,7 +253,7 @@ class RecordingEngine {
       maxRetries: 3
     };
 
-    console.log("FormPilot Recorded Step:", newStep);
+    logger.debug('Recorder', 'Recorded Step:', newStep);
 
     // Send the recorded step to service worker which persists it and forwards to popup
     chrome.runtime.sendMessage({
@@ -265,7 +266,7 @@ class RecordingEngine {
       },
       timestamp: Date.now()
     }).catch(err => {
-      console.error("FormPilot Recorder: Failed to send step to service worker:", err);
+      logger.error('Recorder', 'Failed to send step to service worker:', err);
     });
   }
 

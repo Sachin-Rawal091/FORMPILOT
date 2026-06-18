@@ -2,14 +2,15 @@ import { FormPilotMessage, MessageType } from "../types";
 import { StorageManager } from "../storage/StorageManager";
 import { RecordingQueueHandler } from "./handlers/RecordingQueueHandler";
 import { DataHandler } from "./handlers/DataHandler";
+import { logger } from "../utils/logger";
 
-console.log("FormPilot Service Worker initialized.");
+logger.info('ServiceWorker', 'Initialized.');
 
 // Allow content scripts to read/write chrome.storage.session
 if (chrome.storage && chrome.storage.session && chrome.storage.session.setAccessLevel) {
   chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
-    .then(() => console.log("SW: Session storage access level set to TRUSTED_AND_UNTRUSTED_CONTEXTS"))
-    .catch((err) => console.error("SW: Failed to set session storage access level:", err));
+    .then(() => logger.debug('ServiceWorker', 'Session storage access level set to TRUSTED_AND_UNTRUSTED_CONTEXTS'))
+    .catch((err) => logger.error('ServiceWorker', 'Failed to set session storage access level:', err));
 }
 
 chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendResponse) => {
@@ -37,7 +38,7 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
       activeRecordingSteps: [],
       activeRecordingUrl: payload.url,
       recordingId: payload.recordingId
-    }).catch(err => console.error("SW: Failed to init recording state:", err));
+    }).catch(err => logger.error('ServiceWorker', 'Failed to init recording state:', err));
 
     if (tabId) {
       chrome.tabs.sendMessage(tabId, message).catch(() => {});
@@ -54,7 +55,7 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
     }).then((state) => {
       sendResponse({ recordingState: state });
     }).catch(err => {
-      console.error("SW: Failed to get recording state:", err);
+      logger.error('ServiceWorker', 'Failed to get recording state:', err);
       sendResponse({ recordingState: null });
     });
     return true; // Keep channel open for async response

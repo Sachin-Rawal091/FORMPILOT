@@ -23,6 +23,7 @@ import {
   POST_SUBMIT_SETTLE_MS,
   WAIT_DOM_STABLE_TIMEOUT
 } from "../shared/constants";
+import { logger } from "../utils/logger";
 
 export class Executor {
   private isRunning = false;
@@ -42,7 +43,7 @@ export class Executor {
     
     // Guard: Do not resume if execution has already been actively triggered via messages
     if (this.isRunning) {
-      console.log("[Executor] checkAutoResume: Execution already running, skipping auto-resume.");
+      logger.debug('Executor', 'checkAutoResume: Execution already running, skipping auto-resume.');
       return;
     }
     
@@ -56,11 +57,11 @@ export class Executor {
             const stateUrlObj = new URL(state.currentUrl);
             
             if (currentUrlObj.hostname !== stateUrlObj.hostname || currentUrlObj.pathname !== stateUrlObj.pathname) {
-              console.log(`[Executor] Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
+              logger.debug('Executor', `Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
               
               // If we're on the same domain but wrong path, try to navigate back to the expected path
               if (currentUrlObj.hostname === stateUrlObj.hostname) {
-                console.log(`[Executor] Redirecting to correct path for auto-resume: ${state.currentUrl}`);
+                logger.info('Executor', `Redirecting to correct path for auto-resume: ${state.currentUrl}`);
                 window.location.href = state.currentUrl;
                 return; // Will auto-resume on the new page
               }
@@ -77,12 +78,12 @@ export class Executor {
           } catch(e) {}
         }
         
-        console.log("[Executor] Auto-resuming from previous state...");
+        logger.info('Executor', 'Auto-resuming from previous state...');
         // Re-hydrate and start (will pick up from state.currentRowIndex)
         this.start(state.recordingId, state.sessionId);
       }
     } catch (err) {
-      console.error("[Executor] Failed auto-resume check", err);
+      logger.error('Executor', 'Failed auto-resume check', err);
     }
   }
 
@@ -115,7 +116,7 @@ export class Executor {
       const timer = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          console.warn(`[Executor] sendMessage timed out after ${timeoutMs}ms for type: ${message.type}`);
+          logger.warn('Executor', `sendMessage timed out after ${timeoutMs}ms for type: ${message.type}`);
           resolve({ error: "TIMEOUT", timeout: true });
         }
       }, timeoutMs);
@@ -126,7 +127,7 @@ export class Executor {
             resolved = true;
             clearTimeout(timer);
             if (chrome.runtime.lastError) {
-              console.warn("[Executor] sendMessage lastError:", chrome.runtime.lastError.message);
+              logger.warn('Executor', `sendMessage lastError: ${chrome.runtime.lastError.message}`);
               resolve({ error: chrome.runtime.lastError.message });
             } else {
               resolve(response);
@@ -137,7 +138,7 @@ export class Executor {
         if (!resolved) {
           resolved = true;
           clearTimeout(timer);
-          console.error("[Executor] sendMessage threw exception:", err);
+          logger.error('Executor', "sendMessage threw exception:", err);
           resolve({ error: err.message });
         }
       }
@@ -148,14 +149,14 @@ export class Executor {
 
   async start(recordingId: string, sessionId: string, tabId: number = -1) {
     if (this.isRunning) {
-      console.warn("Executor is already running.");
+      logger.warn('Executor', "Executor is already running.");
       return;
     }
 
     // Immediate storage mutex check to prevent multi-tab race conditions
     const currentState = await StateManager.getState();
     if (currentState?.mutexLock && currentState.mutexLock !== sessionId) {
-      console.warn(`Executor blocked: Mutex locked by session ${currentState.mutexLock}`);
+      logger.warn('Executor', `Executor blocked: Mutex locked by session ${currentState.mutexLock}`);
       return;
     }
 
@@ -194,7 +195,7 @@ export class Executor {
       
       if (isResume) {
         state = currentState;
-        console.log("[Executor] Re-using existing active session state for auto-resume:", state);
+        logger.debug('Executor', 'Re-using existing active session state for auto-resume:', state);
       } else {
         state = await StateManager.initializeSession(
           this.sessionId, 
@@ -203,7 +204,7 @@ export class Executor {
           this.siteUrl,
           tabId
         );
-        console.log("FormPilot Session initialized with state:", state);
+        logger.info('Executor', 'Session initialized with state:', state);
       }
 
       // Send initial state update (status is RUNNING)
@@ -213,7 +214,7 @@ export class Executor {
       await this.runAllRows(totalRows);
 
     } catch (err: any) {
-      console.error("Execution failed to start:", err);
+      logger.error('Executor', "Execution failed to start:", err);
       this.handleFatalError(err.message);
     }
   }
@@ -265,7 +266,7 @@ export class Executor {
       }
 
       // Process this row
-      console.log(`Processing row index: ${row.rowIndex} (${rowIdx + 1} of ${totalRows})`);
+      logger.info('Executor', `Processing row index: ${row.rowIndex} (${rowIdx + 1} of ${totalRows})`);
 
       const rowResult = await this.executeRow(row, state);
 
@@ -298,7 +299,7 @@ export class Executor {
         timestamp: Date.now()
       }, 3000);
       if (setExcelRes?.error && setExcelRes.error !== "TIMEOUT") {
-        console.error("[Executor] Failed to persist Excel status:", setExcelRes.error);
+        logger.error('Executor', 'Failed to persist Excel status:', setExcelRes.error);
       }
 
       // Update and broadcast state
@@ -307,7 +308,7 @@ export class Executor {
 
       // If more rows remain, reset the form for the next row
       if (rowIdx + 1 < totalRows && this.isRunning) {
-        console.log(`[Executor] Resetting form for row ${rowIdx + 2}...`);
+        logger.debug('Executor', `Resetting form for row ${rowIdx + 2}...`);
         await this.resetFormBetweenRows();
         // After reset, wait for DOM to fully stabilize before starting next row
         await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
@@ -349,7 +350,7 @@ export class Executor {
             const rect = el.getBoundingClientRect();
             const style = window.getComputedStyle(el);
             if (rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden") {
-              console.log(`[Executor] Form reset successful (attempt ${attempt + 1}), ready for next row.`);
+              logger.debug('Executor', `Form reset successful (attempt ${attempt + 1}), ready for next row.`);
               return;
             }
           }
@@ -358,13 +359,13 @@ export class Executor {
         }
       } else {
         // No recorded steps to verify against, just proceed
-        console.log("[Executor] No first step to verify, proceeding.");
+        logger.debug('Executor', 'No first step to verify, proceeding.');
         return;
       }
     }
 
     // 3. Fallback: navigate to original siteUrl to get a clean form
-    console.log("[Executor] In-page reset failed, navigating to start URL...");
+    logger.info('Executor', 'In-page reset failed, navigating to start URL...');
     
     // Save state to service worker before navigation
     const state = await StateManager.getState();
@@ -383,10 +384,26 @@ export class Executor {
       // The auto-resume logic will pick up execution on the new page.
       await new Promise(r => setTimeout(r, 10000)); // Safety net
     } else {
-      // If we are already on the siteUrl and it's an SPA, try history or fallback to reload
-      console.log("[Executor] Already at start URL, forcing reload as last resort.");
-      window.location.reload();
-      await new Promise(r => setTimeout(r, 10000)); // Safety net
+      // If we are already on the siteUrl and it's an SPA, navigate away then back
+      // instead of reload() which destroys the JS context and can break auto-resume.
+      logger.info('Executor', 'Already at start URL, navigating via history.back() + siteUrl redirect.');
+      
+      if (window.history.length > 1) {
+        // Step 1: Navigate back in history to move away from current page
+        const currentHref = window.location.href;
+        window.history.back();
+        
+        // Step 2: Wait for the URL to actually change (history.back is async)
+        await SmartWaitEngine.waitForURLChange(currentHref, 5000);
+        
+        // Step 3: Navigate forward to the siteUrl for a clean form load
+        window.location.href = this.siteUrl;
+        await new Promise(r => setTimeout(r, 5000)); // Allow page load before executor restarts
+      } else {
+        // No history available — assign siteUrl directly (triggers full page load like a fresh visit)
+        window.location.href = this.siteUrl;
+        await new Promise(r => setTimeout(r, 5000)); // Allow page load
+      }
     }
   }
 
@@ -404,7 +421,7 @@ export class Executor {
       const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
       const isVisible = (btn as HTMLElement).offsetParent !== null;
       if (isVisible && dismissKeywords.some(kw => text.includes(kw))) {
-        console.log(`[Executor] Clicking dismiss button: "${(btn as HTMLElement).textContent?.trim()}"`);
+        logger.debug('Executor', `Clicking dismiss button: "${(btn as HTMLElement).textContent?.trim()}"`);
         (btn as HTMLElement).click();
         await new Promise(r => setTimeout(r, 500));
         return true;
@@ -426,7 +443,7 @@ export class Executor {
     for (const selector of dismissSelectors) {
       const el = document.querySelector(selector);
       if (el && (el as HTMLElement).offsetParent !== null) {
-        console.log(`[Executor] Clicking dismiss selector: ${selector}`);
+        logger.debug('Executor', `Clicking dismiss selector: ${selector}`);
         (el as HTMLElement).click();
         await new Promise(r => setTimeout(r, 500));
         return true;
@@ -449,7 +466,7 @@ export class Executor {
   // ─── SINGLE ROW EXECUTION ──────────────────────────────────────────
 
   private async executeRow(row: ExcelRow, state: ExecutionState): Promise<"SUCCESS" | "FAILED" | "SKIPPED" | "ABORTED"> {
-    console.log(`Processing row index: ${row.rowIndex}`);
+    logger.debug('Executor', `Processing row index: ${row.rowIndex}`);
     
     let isRowSkipped = false;
     let stepIndex = state.currentStepIndex;
@@ -473,7 +490,7 @@ export class Executor {
 
       // Page Retry Threshold Check
       if (state.pageRetryCount > MAX_PAGE_RETRIES) {
-        console.error(`Page retry ceiling (${MAX_PAGE_RETRIES}) exceeded for step ${step.id}. Aborting row.`);
+        logger.error('Executor', `Page retry ceiling (${MAX_PAGE_RETRIES}) exceeded for step ${step.id}. Aborting row.`);
         await this.logStepFailure(row.rowIndex, step, new Error("Page retry limit exceeded."));
         return "FAILED";
       }
@@ -496,7 +513,7 @@ export class Executor {
               textContent.includes('submit') || textContent.includes('proceed');
             
             if (isNavigationClick || prevStep.action === Action.NAVIGATE_NEXT) {
-              console.log(`[Executor] Post-navigation DOM stability wait after step: ${prevStep.id}`);
+              logger.debug('Executor', `Post-navigation DOM stability wait after step: ${prevStep.id}`);
               await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
             }
           }
@@ -700,7 +717,7 @@ export class Executor {
 
   pause() {
     this.isPaused = true;
-    console.log("Executor paused.");
+    logger.info('Executor', 'Paused.');
   }
 
   resume() {
@@ -716,11 +733,11 @@ export class Executor {
     // Resolve any pending CAPTCHA promise
     ResponseDetectionEngine.forceResolveCaptcha();
     
-    console.log("Executor resumed.");
+    logger.info('Executor', 'Resumed.');
   }
 
   async abort() {
-    console.log("Executor aborting...");
+    logger.warn('Executor', 'Aborting...');
     this.isRunning = false;
     this.isPaused = false;
     
@@ -741,7 +758,7 @@ export class Executor {
   // ─── ERROR HANDLING & LOGGING ──────────────────────────────────────
 
   private async handleFatalError(errMsg: string) {
-    console.error("FormPilot Fatal Error:", errMsg);
+    logger.error('Executor', `FormPilot Fatal Error: ${errMsg}`);
     this.isRunning = false;
     this.isPaused = false;
 

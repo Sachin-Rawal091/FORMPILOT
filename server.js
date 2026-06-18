@@ -34,6 +34,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/job' || url === '/job/' || url === '/jobs' || url === '/jobs/') {
+    const filePath = path.join(__dirname, 'job_portal.html');
+    serveFile(res, filePath, 'text/html');
+    return;
+  }
+
   // Serve any other static files
   const filePath = path.join(__dirname, url);
   const ext = path.extname(filePath);
@@ -55,5 +61,6 @@ function serveFile(res, filePath, mimeType) {
 
 server.listen(PORT, () => {
   console.log(`\n🏛  KRP Government Portal running at: http://localhost:${PORT}/krp`);
+  console.log(`💼  Job Application Portal running at: http://localhost:${PORT}/jobs`);
   console.log(`📋  Ready for FormPilot automation testing.\n`);
 });

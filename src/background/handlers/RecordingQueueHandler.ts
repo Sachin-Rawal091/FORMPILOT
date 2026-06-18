@@ -1,5 +1,6 @@
 import { StorageManager } from "../../storage/StorageManager";
 import { Step } from "../../types";
+import { logger } from "../../utils/logger";
 
 export class RecordingQueueHandler {
   // Track the tab we're recording on so we can route STOP to it
@@ -45,13 +46,13 @@ export class RecordingQueueHandler {
         const pendingSteps = this.stepQueue.splice(0);
         state.activeRecordingSteps.push(...pendingSteps);
         await StorageManager.setRecordingState(state);
-        console.log(`SW: Persisted ${pendingSteps.length} step(s). Total: ${state.activeRecordingSteps.length}`);
+        logger.debug('RecordingQueueHandler', `Persisted ${pendingSteps.length} step(s). Total: ${state.activeRecordingSteps.length}`);
       } else {
-        console.warn("SW: Step queue had items but recording state is inactive. Clearing queue.");
+        logger.warn('RecordingQueueHandler', 'Step queue had items but recording state is inactive. Clearing queue.');
         this.stepQueue = [];
       }
     } catch (err) {
-      console.error("SW: Failed to persist steps from queue:", err);
+      logger.error('RecordingQueueHandler', 'Failed to persist steps from queue:', err);
     } finally {
       this.isProcessingQueue = false;
       // If more steps arrived while we were processing, process again

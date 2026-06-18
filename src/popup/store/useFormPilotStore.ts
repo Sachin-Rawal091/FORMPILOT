@@ -177,6 +177,17 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               const finalState = message.payload.state as ExecutionState;
               set({ executionState: finalState });
               get().loadLogs(finalState.sessionId);
+              
+              // Re-sync excelData from IndexedDB so the popup reflects
+              // per-row status updates (success/fail/skipped) that the
+              // executor wrote directly to IDB during execution.
+              StorageManager.getExcelData().then(freshRows => {
+                if (freshRows && freshRows.length > 0) {
+                  set({ excelData: freshRows });
+                }
+              }).catch(err => {
+                console.error("Zustand: Failed to re-sync excelData on EXECUTION_COMPLETE:", err);
+              });
             }
             break;
 
