@@ -57,11 +57,19 @@ export class StateManager {
       throw new Error("Cannot update state: No active session found in storage.");
     }
 
-    const updatedState = { 
+    const updatedState: ExecutionState = { 
       ...currentState, 
       ...updates,
-      currentUrl: window.location.href // Keep currentUrl updated dynamically
     };
+
+    // Only track currentUrl during active RUNNING state — prevents storing
+    // confirmation/success page URLs that would trigger spurious auto-resume.
+    // If updates explicitly overrides currentUrl, honor it; otherwise default to window.location.href.
+    const effectiveStatus = updates.status ?? currentState.status;
+    if (effectiveStatus === ExecutionStatus.RUNNING) {
+      updatedState.currentUrl = updates.currentUrl ?? window.location.href;
+    }
+
     await StorageManager.setExecutionState(updatedState);
     return updatedState;
   }
@@ -77,7 +85,7 @@ export class StateManager {
     await this.updateState({ pageRetryCount: newCount });
 
     // Returns true if we've exceeded the max
-    return newCount > maxPageRetries;
+    return newCount >= maxPageRetries;
   }
 
   /**

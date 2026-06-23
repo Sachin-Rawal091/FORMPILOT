@@ -1,7 +1,7 @@
 import { Step, Action, LogStatus, SelectorResult } from "../../types";
 import { setInputValue, setSelectValue, setTextareaValue, setCheckboxValue, dispatchEvents } from "../domUtils";
 import { SmartWaitEngine } from "./SmartWaitEngine";
-import { WAIT_ELEMENT_TIMEOUT, WAIT_DOM_STABLE_TIMEOUT } from "../../shared/constants";
+import { WAIT_DOM_STABLE_TIMEOUT } from "../../shared/constants";
 import { StorageManager } from "../../storage/StorageManager";
 import { logger } from "../../utils/logger";
 
@@ -132,17 +132,18 @@ export class ExecutionEngine {
       case Action.SELECT:
         if (el instanceof HTMLSelectElement) {
           setSelectValue(el, resolvedValue || "");
-          // Wait for dependent select options to populate
-          await SmartWaitEngine.waitForSelectOptions(step.selectorMeta, step.selector, WAIT_ELEMENT_TIMEOUT).catch(() => {});
+          // Wait for dependent select options to populate (use DOM stability timeout, not element timeout)
+          await SmartWaitEngine.waitForSelectOptions(step.selectorMeta, step.selector, WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
         }
         break;
 
       case Action.SELECT_RADIO:
-        // Match radio by value attribute
+        // Match radio by value attribute — scope to closest form/fieldset to avoid wrong-form matches
         const nameAttr = el.getAttribute("name");
         if (nameAttr && resolvedValue) {
           const escapedName = CSS.escape(nameAttr);
-          const radios = Array.from(document.querySelectorAll(`input[type="radio"][name="${escapedName}"]`)) as HTMLInputElement[];
+          const scope = el.closest('form, fieldset') || document;
+          const radios = Array.from(scope.querySelectorAll(`input[type="radio"][name="${escapedName}"]`)) as HTMLInputElement[];
           const targetRadio = radios.find(r => r.value === resolvedValue);
           if (targetRadio) {
             setCheckboxValue(targetRadio, true);
@@ -218,10 +219,23 @@ export class ExecutionEngine {
         break;
 
       case Action.DATEPICKER:
-        // Complex custom date picker logic
+        // Custom date picker interaction — click to open, then try to set value
+        logger.warn('ExecutionEngine', `DATEPICKER action: Custom date pickers may not accept programmatic value setting. Step: ${step.id}`);
         dispatchEvents(el, ["mousedown", "mouseup", "click"]);
         if (resolvedValue) {
-          setInputValue(el as HTMLInputElement, resolvedValue);
+          // Try setting on the input directly (works for native date inputs)
+          if (el instanceof HTMLInputElement) {
+            setInputValue(el, resolvedValue);
+          }
+          // Also try setting on any hidden input within the same container
+          // (common pattern in custom date picker libraries)
+          const container = el.closest('.datepicker, .date-picker, .flatpickr-wrapper, [class*="date"]');
+          if (container) {
+            const hiddenInput = container.querySelector('input[type="hidden"], input.flatpickr-input') as HTMLInputElement | null;
+            if (hiddenInput && hiddenInput !== el) {
+              setInputValue(hiddenInput, resolvedValue);
+            }
+          }
         }
         break;
     }

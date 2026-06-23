@@ -76,8 +76,6 @@ export class RetryEngine {
         };
 
       } catch (error: any) {
-        attempt++;
-        
         const classification = this.classifyError(error, step);
         
         if (classification === ErrorClassification.FATAL) {
@@ -86,7 +84,7 @@ export class RetryEngine {
             error,
             classification,
             resolvedStatus: "FAILED",
-            retriesUsed: attempt - 1
+            retriesUsed: attempt
           };
         }
 
@@ -94,9 +92,12 @@ export class RetryEngine {
           return {
             success: true, // Skipping is a successful outcome for an optional step
             resolvedStatus: "STEP_SKIPPED",
-            retriesUsed: attempt - 1
+            retriesUsed: attempt
           };
         }
+
+        // Increment attempt AFTER classification — only for RETRYABLE errors
+        attempt++;
 
         // If we reached max retries and it's still RETRYABLE, escalate
         if (attempt > maxRetries) {

@@ -38,14 +38,16 @@ export class SmartWaitEngine {
         const el = result.element as HTMLElement;
         const rect = el.getBoundingClientRect();
         const style = window.getComputedStyle(el);
-        if (
-          rect.width > 0 &&
-          rect.height > 0 &&
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          style.opacity !== "0"
-        ) {
-          return result;
+        const isBypass = el.tagName === "INPUT" && 
+          ["checkbox", "radio", "file"].includes((el as HTMLInputElement).type?.toLowerCase());
+
+        if (style.display !== "none" && style.visibility !== "hidden") {
+          if (isBypass) {
+            return result;
+          }
+          if (rect.width > 0 && rect.height > 0 && style.opacity !== "0") {
+            return result;
+          }
         }
       }
       return null;
@@ -67,16 +69,21 @@ export class SmartWaitEngine {
         const rect = el.getBoundingClientRect();
         const style = window.getComputedStyle(el);
         const isDisabled = (el as HTMLButtonElement | HTMLInputElement).disabled;
+        const isBypass = el.tagName === "INPUT" && 
+          ["checkbox", "radio", "file"].includes((el as HTMLInputElement).type?.toLowerCase());
 
         if (
-          rect.width > 0 &&
-          rect.height > 0 &&
           style.display !== "none" &&
           style.visibility !== "hidden" &&
           style.pointerEvents !== "none" &&
           !isDisabled
         ) {
-          return result;
+          if (isBypass) {
+            return result;
+          }
+          if (rect.width > 0 && rect.height > 0) {
+            return result;
+          }
         }
       }
       return null;
@@ -135,7 +142,7 @@ export class SmartWaitEngine {
    * - In-page wizard transitions (DOM-only, no URL change)
    */
   static async waitForURLChange(currentURL: string, timeout: number): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let timeoutTimer: ReturnType<typeof setTimeout>;
       let observer: MutationObserver;
       let resolved = false;
@@ -146,7 +153,11 @@ export class SmartWaitEngine {
         if (resolved) return;
         resolved = true;
         cleanup();
-        resolve(result);
+        if (result) {
+          resolve(true);
+        } else {
+          reject(new Error(`URL change timeout after ${timeout}ms`));
+        }
       };
 
       // Fallback polling for pushState/replaceState which don't fire events natively
@@ -205,7 +216,7 @@ export class SmartWaitEngine {
       observer.observe(document.body, { childList: true, subtree: true, attributes: true });
 
       timeoutTimer = setTimeout(() => {
-        done(false); // Timeout reached without meeting conditions
+        done(false); // Timeout reached — will reject
       }, timeout);
     });
   }

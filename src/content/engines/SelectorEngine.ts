@@ -125,7 +125,8 @@ export class SelectorEngine {
     let elementsChecked = 0;
     let foundElement: Element | null = null;
 
-    const traverse = (root: Document | ShadowRoot) => {
+    // Only traverse inside shadow roots — regular DOM was already checked in strategies 1-7
+    const traverseShadowRoot = (root: ShadowRoot) => {
       if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) return;
 
       const allElements = root.querySelectorAll("*");
@@ -133,7 +134,7 @@ export class SelectorEngine {
         const el = allElements[i];
         elementsChecked++;
 
-        if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT) break;
+        if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) break;
 
         // Try primary selector
         if (primarySelector) {
@@ -157,14 +158,22 @@ export class SelectorEngine {
           return;
         }
 
-        // If it has a shadow root, traverse it
+        // Recurse into nested shadow roots
         if (el.shadowRoot) {
-          traverse(el.shadowRoot);
+          traverseShadowRoot(el.shadowRoot);
         }
       }
     };
 
-    traverse(document);
+    // Find all top-level elements with shadow roots and traverse them
+    const topLevelElements = document.querySelectorAll("*");
+    for (let i = 0; i < topLevelElements.length; i++) {
+      if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) break;
+      const el = topLevelElements[i];
+      if (el.shadowRoot) {
+        traverseShadowRoot(el.shadowRoot);
+      }
+    }
 
     if (foundElement) {
       return {

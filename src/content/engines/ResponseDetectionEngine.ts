@@ -34,16 +34,17 @@ export class ResponseDetectionEngine {
       }
     }
 
-    // Piercing shadow DOM to find CAPTCHA (up to 200 elements checked for speed)
+    // Piercing shadow DOM to find CAPTCHA — only check inside actual shadow roots
+    // (direct DOM was already checked above via document.querySelector)
     let shadowFound = false;
     let checkedCount = 0;
-    const traverseShadow = (root: Document | ShadowRoot) => {
+    const traverseShadow = (root: ShadowRoot) => {
       if (shadowFound || checkedCount > 200) return;
       const all = root.querySelectorAll("*");
       for (let i = 0; i < all.length; i++) {
         const el = all[i];
         checkedCount++;
-        if (checkedCount > 200) break;
+        if (checkedCount > 200 || shadowFound) break;
 
         for (const selector of captchaSelectors) {
           if (el.matches && el.matches(selector)) {
@@ -58,7 +59,15 @@ export class ResponseDetectionEngine {
       }
     };
     
-    traverseShadow(document);
+    // Only traverse elements that actually have shadow roots
+    const topLevel = document.querySelectorAll("*");
+    for (let i = 0; i < topLevel.length; i++) {
+      if (shadowFound || checkedCount > 200) break;
+      const sr = topLevel[i].shadowRoot;
+      if (sr) {
+        traverseShadow(sr);
+      }
+    }
     return shadowFound;
   }
 
@@ -314,11 +323,9 @@ export class ResponseDetectionEngine {
       }
     }, 1000);
 
-    // Backup hard timeout
-    this.captchaTimeoutId = setTimeout(() => {
-      this.removeCaptchaOverlay();
-      onTimeout();
-    }, CAPTCHA_SOLVE_TIMEOUT);
+    // Countdown interval handles both the UI timer and the timeout — no separate
+    // hard timeout needed (BUG-006: removed duplicate captchaTimeoutId that was
+    // causing onTimeout to fire twice simultaneously)
   }
 
   /**

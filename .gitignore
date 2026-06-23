@@ -28,6 +28,29 @@ scratch/
 .tempmediaStorage/
 agent_temp/
 *.log
+AGENTS.md
+agent_plan.md
+agent_progess.md
+agent_log.md
+agent_handoff.md
+
+# ─── Local Portals, Servers & Test/Demo Scripts ──────────────────────────────
+job_portal.html
+krp_portal.html
+server.js
+test-extension.js
+run_live_demo.js
+run_live_demo_v2.js
+run_live_demo_v3.js
+verify_automation_live.js
+verify_flow_live.js
+verify_job_flow_live.js
+generate_job_excel.js
+generate_krp_excel.js
+
+# ─── Issue & Bug Logs ────────────────────────────────────────────────────────
+issue.md
+tests/debug/BUG_REPORT.md
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/
@@ -85,3 +108,15 @@ $RECYCLE.BIN/
 .env.test.local
 .env.production.local
 *.env.json
+
+# ─── Local Test / Utility Scripts ──────────────────────────────────────────────
+print_execution_logs.js
+record_and_print_steps.js
+verify_job_automation_live.js
+
+# ─── Excel / Spreadsheet Files ─────────────────────────────────────────────────
+*.xlsx
+*.xls
+*.csv
+
+

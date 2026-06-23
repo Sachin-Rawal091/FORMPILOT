@@ -27,6 +27,9 @@ class RecordingEngine {
           break;
         case MessageType.STOP_RECORDING:
           this.isRecording = false;
+          // BUG-033: Clear all pending debounce timers to prevent steps being recorded after stop
+          this.debounceTimers.forEach(timer => clearTimeout(timer));
+          this.debounceTimers.clear();
           logger.info('Recorder', 'Recording stopped.');
           break;
       }
@@ -34,41 +37,44 @@ class RecordingEngine {
   }
 
   private restoreRecordingState() {
-    logger.debug('Recorder', 'Attempting to restore recording state via GET_STATUS...');
+    // BUG-039: Gate on lightweight session storage check before waking the service worker
     try {
-      chrome.runtime.sendMessage({
-        type: MessageType.GET_STATUS,
-        sessionId: "",
-        payload: {},
-        timestamp: Date.now()
-      }, (response) => {
+      chrome.storage.session.get('recordingState', (result) => {
         if (chrome.runtime.lastError) {
-          logger.warn('Recorder', 'GET_STATUS failed:', chrome.runtime.lastError.message);
+          logger.warn('Recorder', 'Session storage check failed:', chrome.runtime.lastError.message);
           return;
         }
-        logger.debug('Recorder', 'GET_STATUS response received:', JSON.stringify(response));
-        if (response && response.recordingState) {
-          const state = response.recordingState;
-          logger.debug('Recorder', 'Recording state from SW:', JSON.stringify({
-            isRecording: state.isRecording,
-            recordingId: state.recordingId,
-            stepCount: state.activeRecordingSteps?.length,
-            url: state.activeRecordingUrl
-          }));
-          if (state.isRecording) {
-            this.isRecording = true;
-            this.recordingId = state.recordingId || "default";
-            this.currentStepIndex = state.activeRecordingSteps ? state.activeRecordingSteps.length : 0;
-            logger.info('Recorder', `Restored recording state. isRecording: true, recordingId: ${this.recordingId}, stepIndex: ${this.currentStepIndex}`);
-          } else {
-            logger.debug('Recorder', 'Recording state exists but isRecording is false.');
-          }
-        } else {
-          logger.debug('Recorder', 'No recording state in response.');
+        // Only send GET_STATUS if there's evidence of an active recording
+        if (!result || !result.recordingState) {
+          logger.debug('Recorder', 'No recording state in session storage, skipping GET_STATUS.');
+          return;
         }
+
+        logger.debug('Recorder', 'Recording state found in session storage, sending GET_STATUS...');
+        chrome.runtime.sendMessage({
+          type: MessageType.GET_STATUS,
+          sessionId: "",
+          payload: {},
+          timestamp: Date.now()
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            logger.warn('Recorder', 'GET_STATUS failed:', chrome.runtime.lastError.message);
+            return;
+          }
+          logger.debug('Recorder', 'GET_STATUS response received:', JSON.stringify(response));
+          if (response && response.recordingState) {
+            const state = response.recordingState;
+            if (state.isRecording) {
+              this.isRecording = true;
+              this.recordingId = state.recordingId || "default";
+              this.currentStepIndex = state.activeRecordingSteps ? state.activeRecordingSteps.length : 0;
+              logger.info('Recorder', `Restored recording state. isRecording: true, recordingId: ${this.recordingId}, stepIndex: ${this.currentStepIndex}`);
+            }
+          }
+        });
       });
     } catch (err) {
-      logger.error('Recorder', 'Error sending GET_STATUS:', err);
+      logger.error('Recorder', 'Error checking recording state:', err);
     }
   }
 
@@ -110,16 +116,11 @@ class RecordingEngine {
 
     logger.debug('Recorder', `Click event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} type=${el.getAttribute('type') || 'none'}`);
 
-    // Filter out inputs that we handle via change or input listeners to prevent double capturing
+    // BUG-024: Filter out ALL input types handled by change/input events to prevent double capturing
     const tagName = el.tagName.toLowerCase();
-    const typeAttr = el.getAttribute("type")?.toLowerCase() || "";
 
-    if (
-      (tagName === "input" && (typeAttr === "checkbox" || typeAttr === "radio" || typeAttr === "file" || typeAttr === "text" || typeAttr === "email" || typeAttr === "password" || typeAttr === "number" || typeAttr === "tel" || typeAttr === "url")) ||
-      tagName === "select" ||
-      tagName === "textarea"
-    ) {
-      return; // Handled by change or input events
+    if (tagName === "input" || tagName === "select" || tagName === "textarea") {
+      return; // All input-like elements are handled by change or input events
     }
 
     // Deduplication of double-clicks
@@ -130,18 +131,8 @@ class RecordingEngine {
     this.lastClickTime = now;
     this.lastClickedElement = el;
 
-    // Detect cross-origin frame interaction
-    if (window !== window.top) {
-      try {
-        // Simple test to check if we are in cross-origin iframe
-        if (window.parent.location.href) {
-          // Access succeeds, same-origin
-        }
-      } catch (err) {
-        this.addRecordedStep(Action.MANUAL_IFRAME, el, "");
-        return;
-      }
-    }
+    // BUG-018: Cross-origin iframe detection removed — content scripts can't be injected
+    // cross-origin, making the previous check unreachable in practice.
 
     // Capture as CLICK
     this.addRecordedStep(Action.CLICK, el);
@@ -303,7 +294,14 @@ class RecordingEngine {
     if (!meta.labelText) {
       const parentLabel = el.closest("label");
       if (parentLabel) {
-        meta.labelText = parentLabel.textContent?.trim();
+        // BUG-012: Get only direct text nodes, not descendant text (avoids including
+        // input values, tooltips, and icon text that make selectors unmatchable)
+        meta.labelText = Array.from(parentLabel.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent?.trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim() || undefined;
       }
     }
 
@@ -332,7 +330,12 @@ class RecordingEngine {
           }
           sib = sib.previousElementSibling;
         }
-        if (nth > 1 || current.nextElementSibling) {
+        const currNodeName = current.nodeName;
+        const hasSameTypeSiblings = current.parentElement
+          ? Array.from(current.parentElement.children)
+              .filter(c => c.nodeName === currNodeName).length > 1
+          : false;
+        if (hasSameTypeSiblings) {
           selector += `:nth-of-type(${nth})`;
         }
       }
@@ -362,7 +365,14 @@ class RecordingEngine {
       }
 
       const tagName = current.nodeName.toLowerCase();
-      const pathIndex = index > 0 ? `[${index + 1}]` : "";
+      const currNodeName = current.nodeName;
+      // BUG-013: Always include [1] if there are any siblings of the same type,
+      // even if this element is the first child — prevents ambiguous XPaths
+      const hasSameTypeSiblings = current.parentElement
+        ? Array.from(current.parentElement.children)
+            .filter(c => c.nodeName === currNodeName).length > 1
+        : false;
+      const pathIndex = (index > 0 || hasSameTypeSiblings) ? `[${index + 1}]` : "";
       paths.unshift(`${tagName}${pathIndex}`);
       current = current.parentElement;
     }

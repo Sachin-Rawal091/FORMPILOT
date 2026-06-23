@@ -61,7 +61,7 @@ export function setInputValue(input: HTMLInputElement, value: string): void {
   } else {
     input.value = value;
   }
-  dispatchEvents(input, ["input", "change", "blur"]);
+  dispatchEvents(input, ["input", "change"]);
 }
 
 /**
@@ -78,7 +78,7 @@ export function setSelectValue(select: HTMLSelectElement, value: string): void {
   } else {
     select.value = value;
   }
-  dispatchEvents(select, ["change", "blur"]);
+  dispatchEvents(select, ["change"]);
 }
 
 /**
@@ -95,5 +95,5 @@ export function setTextareaValue(textarea: HTMLTextAreaElement, value: string): 
   } else {
     textarea.value = value;
   }
-  dispatchEvents(textarea, ["input", "change", "blur"]);
+  dispatchEvents(textarea, ["input", "change"]);
 }

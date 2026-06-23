@@ -21,12 +21,11 @@ export const MAX_PAGE_RETRIES = 3;
 
 // Polling
 export const POLL_INTERVAL_BASE = 50;
-export const DOM_STABILITY_WINDOW = 500;
 
 // Execution
 export const STEP_DELAY = 100;
 export const CHECKPOINT_INTERVAL = 5;
-export const POST_ROW_DELAY_MS = 2500;
+export const POST_ROW_DELAY_MS = 500;
 export const POST_SUBMIT_SETTLE_MS = 1500;
 
 // Recorder

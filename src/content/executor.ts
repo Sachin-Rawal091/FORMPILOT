@@ -28,6 +28,7 @@ import { logger } from "../utils/logger";
 export class Executor {
   private isRunning = false;
   private isPaused = false;
+  private autoResumeInProgress = false; // BUG-011: prevents START_EXECUTION during auto-resume
   private sessionId = "";
   private recordingSteps: Step[] = [];
   private siteUrl = "";
@@ -50,39 +51,49 @@ export class Executor {
     try {
       const state = await StateManager.getState();
       if (state && state.status === ExecutionStatus.RUNNING && state.recordingId && state.sessionId) {
-        // Only resume if we are still on the same site/domain and roughly the same path
+        // BUG-034: Early hostname guard — only proceed if we're on the right domain
+        const expectedHost = state.siteUrl ? new URL(state.siteUrl).hostname : null;
+        if (expectedHost && !window.location.hostname.includes(expectedHost)) {
+          logger.debug('Executor', `Auto-resume skipped: wrong domain. Expected: ${expectedHost}, Current: ${window.location.hostname}`);
+          return;
+        }
+
+        // BUG-001: Only auto-resume if URL already matches — do NOT redirect.
+        // Redirecting causes infinite navigation loops when the target page
+        // immediately injects a new content script that auto-resumes again.
         if (state.currentUrl) {
           try {
             const currentUrlObj = new URL(window.location.href);
             const stateUrlObj = new URL(state.currentUrl);
             
             if (currentUrlObj.hostname !== stateUrlObj.hostname || currentUrlObj.pathname !== stateUrlObj.pathname) {
-              logger.debug('Executor', `Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
-              
-              // If we're on the same domain but wrong path, try to navigate back to the expected path
-              if (currentUrlObj.hostname === stateUrlObj.hostname) {
-                logger.info('Executor', `Redirecting to correct path for auto-resume: ${state.currentUrl}`);
-                window.location.href = state.currentUrl;
-                return; // Will auto-resume on the new page
+              // If we are at the start of a new row (step 0), we can still resume if we are on the siteUrl
+              let canResume = false;
+              if (state.currentStepIndex === 0 && state.siteUrl) {
+                try {
+                  const siteUrlObj = new URL(state.siteUrl);
+                  if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
+                    canResume = true;
+                  }
+                } catch(e) {}
               }
               
-              return;
-            }
-          } catch(e) {}
-        } else if (state.siteUrl) {
-          try {
-            const siteHost = new URL(state.siteUrl).hostname;
-            if (!window.location.hostname.includes(siteHost)) {
-              return;
+              if (!canResume) {
+                logger.debug('Executor', `Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
+                return;
+              }
             }
           } catch(e) {}
         }
         
         logger.info('Executor', 'Auto-resuming from previous state...');
+        this.autoResumeInProgress = true; // BUG-011: block concurrent START_EXECUTION
         // Re-hydrate and start (will pick up from state.currentRowIndex)
-        this.start(state.recordingId, state.sessionId);
+        await this.start(state.recordingId, state.sessionId);
+        this.autoResumeInProgress = false;
       }
     } catch (err) {
+      this.autoResumeInProgress = false;
       logger.error('Executor', 'Failed auto-resume check', err);
     }
   }
@@ -90,10 +101,16 @@ export class Executor {
   private setupMessageListener() {
     chrome.runtime.onMessage.addListener((message: FormPilotMessage, _sender, sendResponse) => {
       switch (message.type) {
-        case MessageType.START_EXECUTION:
+        case MessageType.START_EXECUTION: {
+          // BUG-011: Block concurrent start if auto-resume is in progress
+          if (this.autoResumeInProgress) {
+            logger.warn('Executor', 'START_EXECUTION blocked: auto-resume in progress.');
+            break;
+          }
           const payload = message.payload as { recordingId: string; sessionId: string };
           this.start(payload?.recordingId, payload?.sessionId || message.sessionId, message.tabId);
           break;
+        }
         case MessageType.PAUSE_EXECUTION:
           this.pause();
           break;
@@ -184,7 +201,7 @@ export class Executor {
         sessionId: this.sessionId,
         timestamp: Date.now()
       }, 5000);
-      if (countRes?.error || countRes?.count === undefined || countRes.count === 0) {
+      if (countRes?.error || countRes?.count === undefined) {
         throw new Error(countRes?.error || "No Excel data found for execution via extension proxy.");
       }
       const totalRows = countRes.count;
@@ -226,6 +243,16 @@ export class Executor {
   // ─────────────────────────────────────────────────────────────────────
 
   private async runAllRows(totalRows: number) {
+    try {
+      await this._runAllRowsImpl(totalRows);
+    } catch (err: any) {
+      // BUG-002: Catch errors from chunk loading, state updates, etc.
+      logger.error('Executor', 'runAllRows fatal error:', err);
+      this.handleFatalError(err.message || 'Unexpected error in execution loop.');
+    }
+  }
+
+  private async _runAllRowsImpl(totalRows: number) {
     let state = (await StateManager.getState()) || this.createFallbackState(totalRows);
 
     let excelRows: ExcelRow[] = [];
@@ -290,19 +317,20 @@ export class Executor {
         row.status = RowStatus.FAILED;
       }
 
-      // Persist Excel row status back to IndexedDB via background proxy
-      // We send back only the modified row to update it.
+      // Persist Excel row status back to IndexedDB via background proxy and await confirmation
       const setExcelRes = await this.safeSendMessage({
         type: MessageType.SET_EXCEL_DATA,
         payload: { excelRows: [row], updateOnly: true }, // Send only the updated row to be merged
         sessionId: this.sessionId,
         timestamp: Date.now()
-      }, 3000);
-      if (setExcelRes?.error && setExcelRes.error !== "TIMEOUT") {
-        logger.error('Executor', 'Failed to persist Excel status:', setExcelRes.error);
+      }, 5000);
+      
+      if (setExcelRes?.error) {
+        logger.error('Executor', 'Failed to persist Excel status to IndexedDB:', setExcelRes.error);
+        throw new Error(`Failed to persist Excel row status: ${setExcelRes.error}`);
       }
 
-      // Update and broadcast state
+      // Update and broadcast state (authoritative checkpoint)
       state = await StateManager.updateState(updates);
       this.broadcastStateUpdate(state);
 
@@ -349,7 +377,14 @@ export class Executor {
             const el = formReady.element as HTMLElement;
             const rect = el.getBoundingClientRect();
             const style = window.getComputedStyle(el);
-            if (rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden") {
+            const isBypass = el.tagName === "INPUT" && 
+              ["checkbox", "radio", "file"].includes((el as HTMLInputElement).type?.toLowerCase());
+            
+            if (
+              style.display !== "none" && 
+              style.visibility !== "hidden" &&
+              (isBypass || (rect.width > 0 && rect.height > 0))
+            ) {
               logger.debug('Executor', `Form reset successful (attempt ${attempt + 1}), ready for next row.`);
               return;
             }
@@ -367,12 +402,13 @@ export class Executor {
     // 3. Fallback: navigate to original siteUrl to get a clean form
     logger.info('Executor', 'In-page reset failed, navigating to start URL...');
     
-    // Save state to service worker before navigation
-    const state = await StateManager.getState();
-    if (state) {
+    // Save state to service worker before navigation.
+    // Update currentUrl in the state to this.siteUrl since we are about to navigate there.
+    const updatedState = await StateManager.updateState({ currentUrl: this.siteUrl });
+    if (updatedState) {
       await this.safeSendMessage({
         type: MessageType.SET_EXECUTION_STATE,
-        payload: { state },
+        payload: { state: updatedState },
         sessionId: this.sessionId,
         timestamp: Date.now()
       }, 5000);
@@ -380,73 +416,71 @@ export class Executor {
 
     if (this.siteUrl && window.location.href !== this.siteUrl) {
       window.location.href = this.siteUrl;
-      // After navigation, this executor instance is destroyed.
-      // The auto-resume logic will pick up execution on the new page.
-      await new Promise(r => setTimeout(r, 10000)); // Safety net
+      // BUG-021: No dead setTimeout needed — the executor instance is destroyed on navigation.
+      // Auto-resume picks up execution on the new page.
     } else {
-      // If we are already on the siteUrl and it's an SPA, navigate away then back
-      // instead of reload() which destroys the JS context and can break auto-resume.
-      logger.info('Executor', 'Already at start URL, navigating via history.back() + siteUrl redirect.');
-      
-      if (window.history.length > 1) {
-        // Step 1: Navigate back in history to move away from current page
-        const currentHref = window.location.href;
-        window.history.back();
-        
-        // Step 2: Wait for the URL to actually change (history.back is async)
-        await SmartWaitEngine.waitForURLChange(currentHref, 5000);
-        
-        // Step 3: Navigate forward to the siteUrl for a clean form load
-        window.location.href = this.siteUrl;
-        await new Promise(r => setTimeout(r, 5000)); // Allow page load before executor restarts
-      } else {
-        // No history available — assign siteUrl directly (triggers full page load like a fresh visit)
-        window.location.href = this.siteUrl;
-        await new Promise(r => setTimeout(r, 5000)); // Allow page load
-      }
+      logger.info('Executor', 'Already at start URL, reloading the page to reset form...');
+      window.location.reload();
     }
   }
 
   /**
    * Attempts to dismiss success modals, overlays, toasts, and alerts by
    * finding and clicking common dismiss/close/ok/complete buttons.
+   * BUG-004: Scoped to detected modal/overlay containers only to avoid
+   * clicking active form buttons like "Next" or "Continue".
    * Returns true if a dismiss button was found and clicked.
    */
   private async dismissSuccessUI(): Promise<boolean> {
-    // Strategy 1: Look for buttons with common dismiss text
-    const dismissKeywords = ['complete', 'finish', 'done', 'close', 'ok', 'continue', 'dismiss', 'got it', 'next'];
-    const allButtons = Array.from(document.querySelectorAll('button, a.btn, [role="button"], input[type="button"]'));
-    
-    for (const btn of allButtons) {
-      const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
-      const isVisible = (btn as HTMLElement).offsetParent !== null;
-      if (isVisible && dismissKeywords.some(kw => text.includes(kw))) {
-        logger.debug('Executor', `Clicking dismiss button: "${(btn as HTMLElement).textContent?.trim()}"`);
-        (btn as HTMLElement).click();
-        await new Promise(r => setTimeout(r, 500));
-        return true;
+    // Strategy 1: Look for visible modal/overlay containers first
+    const modalContainerSelectors = [
+      '.modal.show', '.modal.active', '.modal[style*="display: block"]',
+      '.modal-backdrop + .modal', '[role="dialog"]', '.overlay.active',
+      '.toast.show', '.alert.show', '.alert-success',
+      '#receipt-overlay', '[class*="overlay"][class*="active"]',
+      '.success-modal', '.confirmation-modal'
+    ];
+
+    let modalContainer: Element | null = null;
+    for (const selector of modalContainerSelectors) {
+      const el = document.querySelector(selector);
+      if (el && (el as HTMLElement).offsetParent !== null) {
+        modalContainer = el;
+        break;
       }
     }
 
-    // Strategy 2: Look for common modal dismiss selectors
-    const dismissSelectors = [
-      '#receipt-overlay button',           // KRP portal specific
-      '.modal .btn-close',
-      '.modal [data-dismiss="modal"]',
-      '.modal [data-bs-dismiss="modal"]',
-      '.toast .btn-close',
-      '.alert .close',
-      '[aria-label="Close"]',
-      '.overlay-close'
-    ];
+    // Strategy 2: If a modal container was found, look for dismiss buttons INSIDE it
+    if (modalContainer) {
+      // Safe dismiss keywords — intentionally exclude 'next', 'continue' which are
+      // form navigation buttons that would advance the form prematurely
+      const dismissKeywords = ['complete', 'finish', 'done', 'close', 'ok', 'dismiss', 'got it'];
+      const buttons = Array.from(modalContainer.querySelectorAll('button, a.btn, [role="button"], input[type="button"]'));
+      
+      for (const btn of buttons) {
+        const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
+        const isVisible = (btn as HTMLElement).offsetParent !== null;
+        if (isVisible && dismissKeywords.some(kw => text.includes(kw))) {
+          logger.debug('Executor', `Clicking dismiss button in modal: "${(btn as HTMLElement).textContent?.trim()}"`);
+          (btn as HTMLElement).click();
+          await new Promise(r => setTimeout(r, 500));
+          return true;
+        }
+      }
 
-    for (const selector of dismissSelectors) {
-      const el = document.querySelector(selector);
-      if (el && (el as HTMLElement).offsetParent !== null) {
-        logger.debug('Executor', `Clicking dismiss selector: ${selector}`);
-        (el as HTMLElement).click();
-        await new Promise(r => setTimeout(r, 500));
-        return true;
+      // Try close button selectors within modal
+      const closeSelectors = [
+        '.btn-close', '[data-dismiss="modal"]', '[data-bs-dismiss="modal"]',
+        '[aria-label="Close"]', '.close', '.modal-close'
+      ];
+      for (const selector of closeSelectors) {
+        const el = modalContainer.querySelector(selector);
+        if (el && (el as HTMLElement).offsetParent !== null) {
+          logger.debug('Executor', `Clicking close selector in modal: ${selector}`);
+          (el as HTMLElement).click();
+          await new Promise(r => setTimeout(r, 500));
+          return true;
+        }
       }
     }
 
@@ -489,7 +523,7 @@ export class Executor {
       const step = this.recordingSteps[stepIndex];
 
       // Page Retry Threshold Check
-      if (state.pageRetryCount > MAX_PAGE_RETRIES) {
+      if (state.pageRetryCount >= MAX_PAGE_RETRIES) {
         logger.error('Executor', `Page retry ceiling (${MAX_PAGE_RETRIES}) exceeded for step ${step.id}. Aborting row.`);
         await this.logStepFailure(row.rowIndex, step, new Error("Page retry limit exceeded."));
         return "FAILED";
@@ -548,7 +582,7 @@ export class Executor {
               stepId: step.id,
               action: step.action,
               selector: step.selector,
-              strategy: res.selectorStrategy !== undefined ? res.selectorStrategy.toString() : undefined,
+              selectorStrategy: res.selectorStrategy,
               value: logStatus === "STEP_SKIPPED" ? undefined : step.value,
               result: resultType,
               status: logStatus,
@@ -656,8 +690,9 @@ export class Executor {
       return "SKIPPED";
     }
 
-    // 4. Wait for submission result to settle (success modal, redirect, etc.)
-    await new Promise(r => setTimeout(r, POST_SUBMIT_SETTLE_MS));
+    // 4. Use DOM stability detection instead of fixed delay to detect submission result
+    // BUG-025: SmartWaitEngine.waitForDOMStability is more reliable than a fixed POST_SUBMIT_SETTLE_MS
+    await SmartWaitEngine.waitForDOMStability(POST_SUBMIT_SETTLE_MS).catch(() => {});
 
     // 5. Run final submission detection checks on page
     const finalOutcome = await ResponseDetectionEngine.runSubmissionDetection(
@@ -816,8 +851,13 @@ export class Executor {
       sessionId: this.sessionId,
       payload: { state },
       timestamp: Date.now()
-    }).catch(() => {
-      // Catch error when popup is closed (no listener)
+    }).catch((err: Error) => {
+      // BUG-031: Only silence expected "no listener" errors when popup is closed;
+      // log unexpected errors for debuggability
+      const msg = err?.message?.toLowerCase() || '';
+      if (!msg.includes('receiving end does not exist') && !msg.includes('no listener')) {
+        logger.warn('Executor', `broadcastStateUpdate error: ${err.message}`);
+      }
     });
   }
 
@@ -848,6 +888,11 @@ export class Executor {
   }
 
   private generateUUID(): string {
+    // BUG-040: Use crypto.randomUUID() for cryptographically strong UUIDs
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for environments without crypto.randomUUID
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
       const r = (Math.random() * 16) | 0;
       const v = c === "x" ? r : (r & 0x3) | 0x8;

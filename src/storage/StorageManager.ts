@@ -70,13 +70,25 @@ class StorageManagerImpl {
 
   async getExcelData(offset?: number, limit?: number): Promise<ExcelRow[]> {
     const db = await getDB();
+    const tx = db.transaction('excelData', 'readonly');
+    const store = tx.objectStore('excelData');
+    
     if (offset !== undefined && limit !== undefined) {
-      const tx = db.transaction('excelData', 'readonly');
-      const store = tx.objectStore('excelData');
-      const allRows = await store.getAll();
-      return allRows.slice(offset, offset + limit);
+      const rows: ExcelRow[] = [];
+      let cursor = await store.openCursor();
+      let skipped = 0;
+      while (cursor && skipped < offset) {
+        skipped++;
+        cursor = await cursor.continue();
+      }
+      while (cursor && rows.length < limit) {
+        rows.push(cursor.value);
+        cursor = await cursor.continue();
+      }
+      return rows;
     }
-    return db.getAll('excelData');
+    
+    return store.getAll();
   }
 
   async getExcelDataCount(): Promise<number> {
@@ -123,23 +135,15 @@ class StorageManagerImpl {
       allLogs.sort((a, b) => b.timestamp - a.timestamp); // Newest first
       
       const toDelete = allLogs.slice(LOG_MAX_ENTRIES);
-      for (const log of toDelete) {
-        store.delete(log.id);
-      }
+      await Promise.all(toDelete.map(log => store.delete(log.id)));
       
       const remaining = allLogs.slice(0, LOG_MAX_ENTRIES);
-      for (const log of remaining) {
-        if (log.timestamp < cutoffTime) {
-          store.delete(log.id);
-        }
-      }
+      const remainingToDelete = remaining.filter(log => log.timestamp < cutoffTime);
+      await Promise.all(remainingToDelete.map(log => store.delete(log.id)));
     } else {
       const allLogs = await store.getAll();
-      for (const log of allLogs) {
-        if (log.timestamp < cutoffTime) {
-          store.delete(log.id);
-        }
-      }
+      const toDelete = allLogs.filter(log => log.timestamp < cutoffTime);
+      await Promise.all(toDelete.map(log => store.delete(log.id)));
     }
     
     await tx.done;
@@ -147,8 +151,7 @@ class StorageManagerImpl {
 
   async getLogs(sessionId: string): Promise<LogEntry[]> {
     const db = await getDB();
-    const allLogs = await db.getAll('logs');
-    return allLogs.filter((log: any) => log.sessionId === sessionId);
+    return db.getAllFromIndex('logs', 'sessionId', sessionId);
   }
 
   async addSessionMeta(meta: SessionMeta): Promise<void> {

@@ -34,7 +34,10 @@ export interface Step {
 }
 
 export interface StepOptions {
-  // Placeholder for step-specific options
+  /** Override the default step timeout (ms) */
+  timeoutOverride?: number;
+  /** Wait strategy to use before executing this step */
+  waitStrategy?: 'domStability' | 'networkIdle' | 'urlChange' | 'none';
 }
 
 export interface SelectorMeta {
@@ -136,7 +139,6 @@ export interface LogEntry {
   stepId: string;
   action: Action;
   selector: string;
-  strategy?: string;
   value?: string;
   result: StepResult;
   status: LogStatus;
