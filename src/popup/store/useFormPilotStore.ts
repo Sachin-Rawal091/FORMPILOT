@@ -9,10 +9,11 @@ import {
   ExecutionStatus, 
   MessageType, 
   FormPilotMessage, 
-  Step
+  Step,
+  UserSettings
 } from '../../types';
 
-export type TabType = 'home' | 'recording' | 'data' | 'run' | 'logs';
+export type TabType = 'home' | 'recording' | 'data' | 'run' | 'logs' | 'settings';
 
 interface FormPilotStoreState {
   // Navigation / Tabs
@@ -52,6 +53,11 @@ interface FormPilotStoreState {
   resumeExecution: () => Promise<void>;
   abortExecution: () => Promise<void>;
 
+  // User Settings & Theme
+  settings: UserSettings;
+  updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
+  setTheme: (theme: 'light' | 'dark') => Promise<void>;
+
   // Initialization & Message Bus Listener
   initStore: () => Promise<void>;
   cleanupStoreListener: (() => void) | null;
@@ -85,6 +91,36 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
     executionState: null,
     recentLogs: [],
 
+    // Settings & Theme
+    settings: {
+      stepDelay: 1000,
+      maxStepRetries: 3,
+      waitElementTimeout: 10000,
+      logMaxEntries: 1000,
+      logRetentionDays: 30,
+      theme: 'dark'
+    },
+
+    updateSettings: async (newSettings) => {
+      const current = get().settings;
+      const updated = { ...current, ...newSettings };
+      set({ settings: updated });
+      await StorageManager.setUserSettings(updated);
+    },
+
+    setTheme: async (theme) => {
+      const current = get().settings;
+      const updated = { ...current, theme };
+      set({ settings: updated });
+      await StorageManager.setUserSettings(updated);
+      
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    },
+
     // Init & Listeners
     cleanupStoreListener: null,
 
@@ -116,16 +152,36 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         console.error("Zustand: Failed to hydrate recording state:", err);
       }
 
+      // 2c. Hydrate user settings and theme
+      try {
+        const settings = await StorageManager.getUserSettings();
+        const defaultSettings = {
+          stepDelay: 1000,
+          maxStepRetries: 3,
+          waitElementTimeout: 10000,
+          logMaxEntries: 1000,
+          logRetentionDays: 30,
+          theme: 'dark' as const
+        };
+        const activeSettings = { ...defaultSettings, ...settings };
+        set({ settings: activeSettings });
+
+        // Apply theme to document element
+        if (activeSettings.theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (err) {
+        console.error("Zustand: Failed to hydrate settings:", err);
+      }
+
       // 3. Register Chrome message channel listener
       if (messageListener) {
         chrome.runtime.onMessage.removeListener(messageListener);
       }
 
       messageListener = (message: FormPilotMessage<any>, _sender, sendResponse) => {
-        // IMPORTANT: Only handle messages that the popup cares about.
-        // Do NOT call sendResponse for messages meant for the service worker 
-        // (e.g., GET_STATUS, START_RECORDING, STOP_RECORDING) as that would
-        // intercept the SW's async response before it reaches the content script.
         const handledTypes = [
           MessageType.STATE_UPDATE,
           MessageType.RECORDING_EVENT,
@@ -134,7 +190,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         ];
         
         if (!handledTypes.includes(message.type)) {
-          // Not a message for the popup — don't respond, let the SW handle it
           return false;
         }
 
@@ -146,7 +201,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               const newState = message.payload.state as ExecutionState;
               set({ executionState: newState });
               
-              // Auto route to run screen if execution starts running
               if (
                 newState.status === ExecutionStatus.RUNNING || 
                 newState.status === ExecutionStatus.PAUSED || 
@@ -155,7 +209,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
                 set({ activeTab: 'run' });
               }
 
-              // Load logs for the current active session
               get().loadLogs(newState.sessionId);
             }
             break;
@@ -178,9 +231,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               set({ executionState: finalState });
               get().loadLogs(finalState.sessionId);
               
-              // Re-sync excelData from IndexedDB so the popup reflects
-              // per-row status updates (success/fail/skipped) that the
-              // executor wrote directly to IDB during execution.
               StorageManager.getExcelData().then(freshRows => {
                 if (freshRows && freshRows.length > 0) {
                   set({ excelData: freshRows });
@@ -213,12 +263,30 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
 
       chrome.runtime.onMessage.addListener(messageListener);
 
+      // Listen for local storage updates in other tabs
+      const storageListener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+        if (areaName === 'local' && changes.settings) {
+          const newSettings = changes.settings.newValue || {};
+          const currentSettings = get().settings;
+          const merged = { ...currentSettings, ...newSettings };
+          set({ settings: merged });
+          
+          if (merged.theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        }
+      };
+      chrome.storage.onChanged.addListener(storageListener);
+
       set({
         cleanupStoreListener: () => {
           if (messageListener) {
             chrome.runtime.onMessage.removeListener(messageListener);
             messageListener = null;
           }
+          chrome.storage.onChanged.removeListener(storageListener);
         }
       });
     },
@@ -274,23 +342,22 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         activeTab: 'recording'
       });
 
-      // Navigate current active tab to the target URL
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) {
-          chrome.tabs.update(tabs[0].id, { url });
+      // Create a new tab and navigate to the target URL
+      chrome.tabs.create({ url, active: true }, (tab) => {
+        if (tab?.id) {
+          // Broadcast START_RECORDING to service worker with the new tab's ID context
+          const message: FormPilotMessage = {
+            type: MessageType.START_RECORDING,
+            sessionId: recordingId,
+            payload: { recordingId, url },
+            tabId: tab.id,
+            timestamp: Date.now()
+          };
+          
+          chrome.runtime.sendMessage(message).catch(err => {
+            console.error("Could not broadcast START_RECORDING:", err);
+          });
         }
-      });
-
-      // Broadcast START_RECORDING to service worker
-      const message: FormPilotMessage = {
-        type: MessageType.START_RECORDING,
-        sessionId: recordingId,
-        payload: { recordingId, url },
-        timestamp: Date.now()
-      };
-      
-      chrome.runtime.sendMessage(message).catch(err => {
-        console.error("Could not broadcast START_RECORDING:", err);
       });
     },
 
@@ -528,13 +595,51 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
       // Save mapping changes before starting
       await get().saveMappings();
 
+      // 2. Determine target tab: last active web tab, fallback to open web tabs, or fail
+      const currentTab = await new Promise<chrome.tabs.Tab | undefined>((resolve) => {
+        chrome.tabs.getCurrent(resolve);
+      });
+      const currentTabId = currentTab?.id;
+
+      let targetTabId: number | null = null;
+
+      // Check lastActiveWebTabId
+      const localData = await chrome.storage.local.get('lastActiveWebTabId');
+      const lastActiveWebTabId = localData.lastActiveWebTabId as number | undefined;
+
+      if (typeof lastActiveWebTabId === 'number' && lastActiveWebTabId !== currentTabId) {
+        try {
+          const tab = await chrome.tabs.get(lastActiveWebTabId);
+          if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
+            targetTabId = tab.id;
+          }
+        } catch {
+          // Tab closed or inaccessible
+        }
+      }
+
+      // Fallback: Find another web tab in the current window
+      if (!targetTabId) {
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        const fallbackTab = tabs.find(tab => 
+          tab.id && 
+          tab.id !== currentTabId && 
+          tab.url && 
+          (tab.url.startsWith('http://') || tab.url.startsWith('https://'))
+        );
+        if (fallbackTab && fallbackTab.id) {
+          targetTabId = fallbackTab.id;
+        }
+      }
+
+      // Safeguard: If no valid web page tab is open, stop and show alert
+      if (!targetTabId) {
+        throw new Error("Please open a web page tab before running automation.");
+      }
+
       const sessionId = crypto.randomUUID();
 
-      // Find active tab ID to pass context
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      const activeTabId = tabs[0]?.id || -1;
-
-      // 2. Initialize initial Execution State
+      // Initialize execution state with tab context
       const initState: ExecutionState = {
         sessionId,
         currentRowIndex: 0,
@@ -546,12 +651,13 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         failedRows: 0,
         skippedRows: 0,
         pageRetryCount: 0,
-        mutexLock: sessionId, // Set Mutex lock
+        mutexLock: sessionId,
         captchaPending: false,
-        tabContext: activeTabId,
+        tabContext: targetTabId,
         lastStepResult: "",
         recordingId: selectedRecording.id,
-        siteUrl: selectedRecording.siteUrl
+        siteUrl: selectedRecording.siteUrl,
+        currentUrl: selectedRecording.siteUrl
       };
 
       await StorageManager.setExecutionState(initState);
@@ -561,20 +667,9 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         activeTab: 'run'
       });
 
-      // 3. Dispatch execution command to active tab content script
-      const runMsg: FormPilotMessage = {
-        type: MessageType.START_EXECUTION,
-        sessionId,
-        payload: {
-          recordingId: selectedRecording.id,
-          sessionId
-        },
-        tabId: activeTabId,
-        timestamp: Date.now()
-      };
-
-      chrome.runtime.sendMessage(runMsg).catch(err => {
-        console.error("Failed to transmit execution start command:", err);
+      // 3. Update target tab URL without activating it to keep dashboard focused
+      chrome.tabs.update(targetTabId, { url: selectedRecording.siteUrl, active: false }, () => {
+        // Content script's checkAutoResume() automatically starts processing when the page loads
       });
     },
 
@@ -582,10 +677,18 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
       const { executionState } = get();
       if (!executionState) return;
 
+      // Resolve tabId so the service worker can route to the content script
+      let targetTabId = executionState.tabContext;
+      if (!targetTabId || targetTabId === -1) {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        targetTabId = tabs[0]?.id || -1;
+      }
+
       const pauseMsg: FormPilotMessage = {
         type: MessageType.PAUSE_EXECUTION,
         sessionId: executionState.sessionId,
         payload: {},
+        tabId: targetTabId,
         timestamp: Date.now()
       };
 
@@ -603,10 +706,18 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
       const { executionState } = get();
       if (!executionState) return;
 
+      // Resolve tabId so the service worker can route to the content script
+      let targetTabId = executionState.tabContext;
+      if (!targetTabId || targetTabId === -1) {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        targetTabId = tabs[0]?.id || -1;
+      }
+
       const resumeMsg: FormPilotMessage = {
         type: MessageType.RESUME_EXECUTION,
         sessionId: executionState.sessionId,
         payload: {},
+        tabId: targetTabId,
         timestamp: Date.now()
       };
 
@@ -623,24 +734,30 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
 
     abortExecution: async () => {
       const { executionState } = get();
-      if (!executionState) return;
 
-      const abortMsg: FormPilotMessage = {
-        type: MessageType.ABORT_EXECUTION,
-        sessionId: executionState.sessionId,
-        payload: {},
-        timestamp: Date.now()
-      };
+      // Resolve tabId so the service worker can route to the content script
+      let targetTabId = executionState?.tabContext;
+      if (!targetTabId || targetTabId === -1) {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        targetTabId = tabs[0]?.id || -1;
+      }
 
-      await chrome.runtime.sendMessage(abortMsg).catch(() => {});
+      if (executionState) {
+        const abortMsg: FormPilotMessage = {
+          type: MessageType.ABORT_EXECUTION,
+          sessionId: executionState.sessionId,
+          payload: {},
+          tabId: targetTabId,
+          timestamp: Date.now()
+        };
 
-      const updatedState = {
-        ...executionState,
-        status: ExecutionStatus.IDLE,
-        mutexLock: null // Release Mutex
-      };
-      await StorageManager.setExecutionState(updatedState);
-      set({ executionState: updatedState });
+        await chrome.runtime.sendMessage(abortMsg).catch(() => {});
+      }
+
+      // Always clear execution state — even if message fails to reach content script,
+      // ensure the popup releases the mutex and resets the UI.
+      await StorageManager.clearExecutionState();
+      set({ executionState: null, activeTab: 'home' });
     },
   };
 });

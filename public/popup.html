@@ -3,7 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FormPilot Popup</title>
+    <title>FormPilot Dashboard</title>
+    <script>
+      (function() {
+        try {
+          chrome.storage.local.get('settings', function(data) {
+            if (data && data.settings && data.settings.theme === 'dark') {
+              document.documentElement.classList.add('dark');
+            } else if (data && data.settings && data.settings.theme === 'light') {
+              document.documentElement.classList.remove('dark');
+            } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+              document.documentElement.classList.add('dark');
+            }
+          });
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

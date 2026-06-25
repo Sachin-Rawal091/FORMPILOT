@@ -8,7 +8,8 @@ import {
   MessageType, 
   FormPilotMessage, 
   StepResult, 
-  LogStatus
+  LogStatus,
+  UserSettings
 } from "../types";
 import { StateManager } from "./engines/StateManager";
 import { RetryEngine, ErrorClassification } from "./engines/RetryEngine";
@@ -32,6 +33,7 @@ export class Executor {
   private sessionId = "";
   private recordingSteps: Step[] = [];
   private siteUrl = "";
+  private stepDelay = STEP_DELAY;
   
   constructor() {
     this.setupMessageListener();
@@ -87,6 +89,27 @@ export class Executor {
         }
         
         logger.info('Executor', 'Auto-resuming from previous state...');
+        
+        // Load custom settings overrides from local storage
+        try {
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            const localData = await chrome.storage.local.get('settings');
+            const settings = (localData.settings || {}) as UserSettings;
+            this.stepDelay = settings.stepDelay ?? STEP_DELAY;
+            RetryEngine.customSettings = {
+              waitElementTimeout: settings.waitElementTimeout,
+              maxStepRetries: settings.maxStepRetries
+            };
+            logger.info('Executor', 'Custom settings loaded for auto-resume:', {
+              stepDelay: this.stepDelay,
+              waitElementTimeout: RetryEngine.customSettings.waitElementTimeout,
+              maxStepRetries: RetryEngine.customSettings.maxStepRetries
+            });
+          }
+        } catch (err) {
+          logger.error('Executor', 'Failed to load custom settings in auto-resume:', err);
+        }
+
         this.autoResumeInProgress = true; // BUG-011: block concurrent START_EXECUTION
         // Re-hydrate and start (will pick up from state.currentRowIndex)
         await this.start(state.recordingId, state.sessionId);
@@ -168,6 +191,26 @@ export class Executor {
     if (this.isRunning) {
       logger.warn('Executor', "Executor is already running.");
       return;
+    }
+
+    // Load custom settings overrides from storage
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        const localData = await chrome.storage.local.get('settings');
+        const settings = (localData.settings || {}) as UserSettings;
+        this.stepDelay = settings.stepDelay ?? STEP_DELAY;
+        RetryEngine.customSettings = {
+          waitElementTimeout: settings.waitElementTimeout,
+          maxStepRetries: settings.maxStepRetries
+        };
+        logger.info('Executor', 'Custom settings loaded for start:', {
+          stepDelay: this.stepDelay,
+          waitElementTimeout: RetryEngine.customSettings.waitElementTimeout,
+          maxStepRetries: RetryEngine.customSettings.maxStepRetries
+        });
+      }
+    } catch (err) {
+      logger.error('Executor', 'Failed to load custom settings in start:', err);
     }
 
     // Immediate storage mutex check to prevent multi-tab race conditions
@@ -530,7 +573,7 @@ export class Executor {
       }
 
       // Human-like pacing delay
-      await new Promise(r => setTimeout(r, STEP_DELAY));
+      await new Promise(r => setTimeout(r, this.stepDelay));
 
       // After navigation/page-transition clicks, wait for DOM to stabilize before proceeding
       // This handles SPA wizard transitions where sections toggle visibility
@@ -700,30 +743,39 @@ export class Executor {
       this.sessionId
     );
 
-    // Row status summary logging
-    await this.safeSendMessage({
-      type: MessageType.ADD_LOG_ENTRY,
-      payload: {
-        entry: {
-          id: this.generateUUID(),
-          sessionId: this.sessionId,
-          timestamp: Date.now(),
-          rowIndex: row.rowIndex,
-          stepId: "row_summary",
-          action: Action.SUBMIT,
-          selector: "page_summary",
-          result: finalOutcome === "SUCCESS" ? StepResult.SUCCESS : StepResult.FAILED,
-          status: finalOutcome === "SUCCESS" ? "SUCCESS" : "FAILED",
-          error: finalOutcome === "FAILED" ? "Submission check returned FAILED." : undefined,
-          retryCount: 0,
-          duration: 0
-        }
-      },
-      sessionId: this.sessionId,
-      timestamp: Date.now()
-    }, 2000);
+    // If all recorded steps completed successfully and no explicit failure was
+    // detected on the page, treat the row as SUCCESS.  The old logic treated
+    // "UNKNOWN" (no success banner AND no failure banner) as FAILED, which
+    // incorrectly failed every row on forms that don't render a success modal.
+    const isRowSuccess = finalOutcome !== "FAILED";
 
-    return finalOutcome === "SUCCESS" ? "SUCCESS" : "FAILED";
+    // Only log a page_summary entry when the detection found an actual failure,
+    // so it doesn't pollute the logs with misleading "Submission check returned FAILED" entries.
+    if (!isRowSuccess) {
+      await this.safeSendMessage({
+        type: MessageType.ADD_LOG_ENTRY,
+        payload: {
+          entry: {
+            id: this.generateUUID(),
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            rowIndex: row.rowIndex,
+            stepId: "row_summary",
+            action: Action.SUBMIT,
+            selector: "page_summary",
+            result: StepResult.FAILED,
+            status: "FAILED",
+            error: "Submission failure detected on page (error banners or validation errors visible).",
+            retryCount: 0,
+            duration: 0
+          }
+        },
+        sessionId: this.sessionId,
+        timestamp: Date.now()
+      }, 2000);
+    }
+
+    return isRowSuccess ? "SUCCESS" : "FAILED";
   }
 
   // ─── COMPLETION ────────────────────────────────────────────────────

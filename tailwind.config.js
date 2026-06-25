@@ -4,8 +4,13 @@ export default {
     "./public/popup.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        outfit: ['Outfit', 'sans-serif'],
+      },
       animation: {
         'fade-in': 'fadeIn 0.25s ease-out',
         'slide-up': 'slideUp 0.2s ease-out',

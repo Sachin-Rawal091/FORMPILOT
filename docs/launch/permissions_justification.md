@@ -46,7 +46,7 @@ Although `<all_urls>` is a broad permission, FormPilot implements strict, defens
 
 | Permission | Technical Need / Justification |
 |------------|--------------------------------|
-| `storage` | To save user settings and index recorded flows. |
+| `storage` | To save user settings, recorded flows, and logs in local IndexedDB. |
 | `scripting` | To inject React/Vue native event setters into the target tab's context. |
-| `alarms` | To manage the 3-minute CAPTCHA-pause timer in the background. |
 | `notifications` | To alert users with desktop notifications when manual input (like a CAPTCHA) is required. |
+| `tabs` | To query open browser tabs, track active web pages, and update tab URLs for same-tab redirection without shifting focus. |

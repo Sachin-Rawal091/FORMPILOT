@@ -124,20 +124,25 @@ class StorageManagerImpl {
     const tx = db.transaction('logs', 'readwrite');
     const store = tx.objectStore('logs');
     
+    // Read limits from settings
+    const settings = await this.getUserSettings();
+    const maxEntries = settings?.logMaxEntries ?? LOG_MAX_ENTRIES;
+    const retentionDays = settings?.logRetentionDays ?? LOG_RETENTION_DAYS;
+
     // Cleanup by date
-    const cutoffTime = Date.now() - (LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
     const allKeys = await store.getAllKeys();
     
     // To do an efficient date cleanup without an index on timestamp, 
     // we fetch all records to check their timestamps if they exceed max entries
-    if (allKeys.length > LOG_MAX_ENTRIES) {
+    if (allKeys.length > maxEntries) {
       const allLogs = await store.getAll();
       allLogs.sort((a, b) => b.timestamp - a.timestamp); // Newest first
       
-      const toDelete = allLogs.slice(LOG_MAX_ENTRIES);
+      const toDelete = allLogs.slice(maxEntries);
       await Promise.all(toDelete.map(log => store.delete(log.id)));
       
-      const remaining = allLogs.slice(0, LOG_MAX_ENTRIES);
+      const remaining = allLogs.slice(0, maxEntries);
       const remainingToDelete = remaining.filter(log => log.timestamp < cutoffTime);
       await Promise.all(remainingToDelete.map(log => store.delete(log.id)));
     } else {

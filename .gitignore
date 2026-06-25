@@ -10,6 +10,7 @@ build/
 out/
 bin/
 obj/
+*.zip
 
 # ─── Screenshots & Media Artifacts ────────────────────────────────────────────
 live_demo_screenshots/
@@ -118,5 +119,6 @@ verify_job_automation_live.js
 *.xlsx
 *.xls
 *.csv
+~$*
 
 

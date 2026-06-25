@@ -3,9 +3,8 @@
   "name": "FormPilot",
   "version": "1.0.0",
   "description": "Production-grade Chrome Extension that eliminates manual form filling at scale.",
-  "action": {
-    "default_popup": "public/popup.html"
-  },
+  "action": {},
+  "options_page": "public/popup.html",
   "background": {
     "service_worker": "src/background/service-worker.ts",
     "type": "module"
@@ -20,7 +19,8 @@
     "activeTab",
     "storage",
     "scripting",
-    "notifications"
+    "notifications",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"

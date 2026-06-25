@@ -19,6 +19,11 @@ export interface StepExecutionResult {
 }
 
 export class RetryEngine {
+  static customSettings: {
+    waitElementTimeout?: number;
+    maxStepRetries?: number;
+  } = {};
+
   /**
    * Orchestrates the execution of a single step with retry logic, backoff, and error classification.
    */
@@ -48,7 +53,7 @@ export class RetryEngine {
       };
     }
 
-    const maxRetries = step.maxRetries ?? MAX_STEP_RETRIES;
+    const maxRetries = step.maxRetries ?? RetryEngine.customSettings.maxStepRetries ?? MAX_STEP_RETRIES;
     let attempt = 0;
     let currentBackoff = RETRY_BACKOFF_BASE;
 
@@ -58,7 +63,7 @@ export class RetryEngine {
         const selectorResult = await SmartWaitEngine.waitForElementVisible(
           step.selectorMeta,
           step.selector,
-          WAIT_ELEMENT_TIMEOUT
+          RetryEngine.customSettings.waitElementTimeout ?? WAIT_ELEMENT_TIMEOUT
         );
 
         if (!selectorResult) {

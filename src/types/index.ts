@@ -207,7 +207,12 @@ export interface RecordingState {
 }
 
 export interface UserSettings {
-  // Placeholder for user settings
+  stepDelay?: number;
+  maxStepRetries?: number;
+  waitElementTimeout?: number;
+  logMaxEntries?: number;
+  logRetentionDays?: number;
+  theme?: 'light' | 'dark';
 }
 
 

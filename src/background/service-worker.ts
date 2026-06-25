@@ -1,4 +1,4 @@
-import { FormPilotMessage, MessageType } from "../types";
+import { FormPilotMessage, MessageType, ExecutionStatus, Action, StepResult } from "../types";
 import { StorageManager } from "../storage/StorageManager";
 import { RecordingQueueHandler } from "./handlers/RecordingQueueHandler";
 import { DataHandler } from "./handlers/DataHandler";
@@ -13,6 +13,126 @@ if (chrome.storage && chrome.storage.session && chrome.storage.session.setAccess
     .catch((err) => logger.error('ServiceWorker', 'Failed to set session storage access level:', err));
 }
 
+// Action click listener to open the options page tab
+chrome.action.onClicked.addListener(() => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const activeTab = tabs[0];
+    if (activeTab && activeTab.id && activeTab.url && !activeTab.url.startsWith('chrome-extension://')) {
+      chrome.storage.local.set({ lastActiveWebTabId: activeTab.id });
+    }
+    chrome.runtime.openOptionsPage();
+  });
+});
+
+// Helper for sending messages with retry to loaded tabs
+async function sendMessageWithRetry(tabId: number, message: any, retries = 5, delay = 1000): Promise<any> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, message);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      logger.warn('ServiceWorker', `Failed to send message to tab ${tabId}, retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Handle closed tabs gracefully
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  // Check active recording tab
+  const activeRecTab = RecordingQueueHandler.getActiveTab();
+  if (activeRecTab === tabId) {
+    logger.info('ServiceWorker', `Active recording tab ${tabId} was closed. Flushing queue and saving partial recording.`);
+    await RecordingQueueHandler.flushQueue();
+    const state = await StorageManager.getRecordingState();
+    if (state && state.isRecording && state.activeRecordingSteps.length > 0) {
+      try {
+        const recordings = await StorageManager.getRecordings();
+        const steps = state.activeRecordingSteps;
+        const url = state.activeRecordingUrl;
+        const pagesMap = new Map<string, string>();
+        steps.forEach(step => {
+          if (step.pageId && !pagesMap.has(step.pageId)) {
+            pagesMap.set(step.pageId, step.pageId);
+          }
+        });
+        const pages = Array.from(pagesMap.entries()).map(([id, pattern]) => ({
+          id,
+          urlPattern: pattern
+        }));
+        let siteId = "generic";
+        try { siteId = new URL(url).hostname; } catch {}
+
+        const newRecording = {
+          id: state.recordingId || crypto.randomUUID(),
+          name: `Partial: Recording on ${new Date().toLocaleDateString()}`,
+          siteUrl: url,
+          siteId,
+          steps,
+          pages,
+          pageCount: pages.length || 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          version: 1
+        };
+        await StorageManager.setRecordings([...recordings, newRecording]);
+        logger.info('ServiceWorker', `Partial recording saved successfully: ${newRecording.name}`);
+      } catch (err) {
+        logger.error('ServiceWorker', 'Failed to save partial recording on tab close:', err);
+      }
+    }
+    await StorageManager.clearRecordingState();
+    RecordingQueueHandler.setActiveTab(null);
+    // Broadcast state update
+    chrome.runtime.sendMessage({
+      type: MessageType.STATE_UPDATE,
+      payload: {},
+      timestamp: Date.now()
+    }).catch(() => {});
+  }
+
+  // Check executing tab
+  const execState = await StorageManager.getExecutionState();
+  if (execState && execState.tabContext === tabId && execState.status !== ExecutionStatus.COMPLETE && execState.status !== ExecutionStatus.FAILED) {
+    logger.info('ServiceWorker', `Execution tab ${tabId} was closed. Aborting execution.`);
+    const failedRowsCount = execState.totalRows - execState.completedRows - execState.skippedRows;
+    const updatedState = {
+      ...execState,
+      status: ExecutionStatus.FAILED,
+      failedRows: Math.max(0, failedRowsCount),
+      mutexLock: null
+    };
+    await StorageManager.setExecutionState(updatedState);
+    
+    // Log the fatal error
+    try {
+      await StorageManager.addLogEntry({
+        id: crypto.randomUUID(),
+        sessionId: execState.sessionId,
+        rowIndex: execState.currentRowIndex,
+        stepId: "SYSTEM",
+        action: Action.WAIT,
+        selector: "window",
+        result: StepResult.FAILED,
+        status: "FAILED",
+        error: "Target browser tab was closed accidentally by the user.",
+        retryCount: 0,
+        duration: 0,
+        timestamp: Date.now()
+      });
+    } catch (err) {
+      logger.error('ServiceWorker', 'Failed to log tab closure error:', err);
+    }
+
+    // Broadcast state update
+    chrome.runtime.sendMessage({
+      type: MessageType.STATE_UPDATE,
+      payload: { state: updatedState },
+      timestamp: Date.now()
+    }).catch(() => {});
+  }
+});
+
 chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendResponse) => {
   const tabId = message.tabId || sender.tab?.id;
 
@@ -26,7 +146,7 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]?.id) {
           RecordingQueueHandler.setActiveTab(tabs[0].id);
-          chrome.tabs.sendMessage(tabs[0].id, message).catch(() => {});
+          sendMessageWithRetry(tabs[0].id, message).catch(() => {});
         }
       });
     }
@@ -41,7 +161,7 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
     }).catch(err => logger.error('ServiceWorker', 'Failed to init recording state:', err));
 
     if (tabId) {
-      chrome.tabs.sendMessage(tabId, message).catch(() => {});
+      sendMessageWithRetry(tabId, message).catch(() => {});
     }
 
     sendResponse({ received: true });
@@ -92,10 +212,23 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
     message.type === MessageType.RESUME_EXECUTION ||
     message.type === MessageType.ABORT_EXECUTION
   ) {
+    const sendFn = message.type === MessageType.START_EXECUTION ? sendMessageWithRetry : async (id: number, msg: any) => chrome.tabs.sendMessage(id, msg);
     if (tabId) {
-      chrome.tabs.sendMessage(tabId, message).catch(() => {});
+      sendFn(tabId, message).catch(() => {});
+      sendResponse({ received: true });
+    } else {
+      // Fallback: popup messages don't have sender.tab, query the active tab
+      logger.warn('ServiceWorker', `No tabId for ${MessageType[message.type]}, falling back to active tab query.`);
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const fallbackTabId = tabs[0]?.id;
+        if (fallbackTabId) {
+          sendFn(fallbackTabId, message).catch(() => {});
+        } else {
+          logger.error('ServiceWorker', `Could not resolve any tab for ${MessageType[message.type]}`);
+        }
+      });
+      sendResponse({ received: true });
     }
-    sendResponse({ received: true });
     return;
   }
 

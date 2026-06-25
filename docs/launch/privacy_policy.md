@@ -38,9 +38,10 @@ All data is stored **exclusively** inside your local browser storage:
 
 FormPilot requests the following permissions to operate on your behalf:
 *   `activeTab` & `<all_urls>`: Required to allow FormPilot's recorder and executor scripts to interact with form fields on target websites that you navigate to.
-*   `storage`: Required to save and load recorded flows and user settings.
+*   `storage`: Required to save and load recorded flows, user settings, and execution logs in local IndexedDB.
 *   `scripting`: Required to inject DOM helper libraries (such as safe React-input setters) into your active tab.
-*   `alarms` & `notifications`: Required to ring sound notifications and display alert boxes when user attention is needed (e.g. when a CAPTCHA is detected).
+*   `notifications`: Required to display desktop notifications when user attention is needed (e.g. when a CAPTCHA is detected).
+*   `tabs`: Required to locate background web pages and perform same-tab URL redirection.
 
 ---
 
