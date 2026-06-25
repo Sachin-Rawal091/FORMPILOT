@@ -38,6 +38,7 @@ agent_handoff.md
 # ─── Local Portals, Servers & Test/Demo Scripts ──────────────────────────────
 job_portal.html
 krp_portal.html
+student_portal.html
 server.js
 test-extension.js
 run_live_demo.js
@@ -46,8 +47,10 @@ run_live_demo_v3.js
 verify_automation_live.js
 verify_flow_live.js
 verify_job_flow_live.js
+verify_same_tab_automation.js
 generate_job_excel.js
 generate_krp_excel.js
+generate_student_excel.js
 
 # ─── Issue & Bug Logs ────────────────────────────────────────────────────────
 issue.md
