@@ -239,7 +239,7 @@ class RecordingEngine {
       value,
       pageId,
       checked,
-      required: true,
+      required: (el as any).required === true || el.hasAttribute('required'),
       retryable: true,
       maxRetries: 3
     };
