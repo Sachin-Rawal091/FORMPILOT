@@ -93,7 +93,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
 
     // Settings & Theme
     settings: {
-      stepDelay: 1000,
+      stepDelay: 100,
       maxStepRetries: 3,
       waitElementTimeout: 10000,
       logMaxEntries: 1000,
@@ -156,7 +156,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
       try {
         const settings = await StorageManager.getUserSettings();
         const defaultSettings = {
-          stepDelay: 1000,
+          stepDelay: 100,
           maxStepRetries: 3,
           waitElementTimeout: 10000,
           logMaxEntries: 1000,
