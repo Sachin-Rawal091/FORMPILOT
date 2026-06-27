@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ExcelRow, Recording } from '../src/types';
+import { MessageType } from '../src/types';
 
 // 1. Setup global chrome mock BEFORE importing any scripts so they register correctly
 const listeners: Array<(message: any, sender: any, sendResponse: any) => void> = [];
@@ -35,7 +36,7 @@ describe('Integration Flow - Record to Execution Loop', () => {
     mockChrome.runtime.sendMessage.mockReset();
     mockChrome.runtime.sendMessage.mockImplementation((msg: any, callback?: any) => {
       if (callback) {
-        if (msg.type === 15) { // GET_RECORDING_DATA
+        if (msg.type === MessageType.GET_RECORDING_DATA) {
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             StorageManager.getRecordings().then(recs => {
               callback({ recording: recs.find(r => r.id === msg.payload.recordingId) });
@@ -43,7 +44,7 @@ describe('Integration Flow - Record to Execution Loop', () => {
           });
           return true;
         }
-        if (msg.type === 16) { // GET_EXCEL_DATA
+        if (msg.type === MessageType.GET_EXCEL_DATA) {
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             if (msg.payload?.countOnly) {
               StorageManager.getExcelData().then(rows => {
@@ -57,7 +58,7 @@ describe('Integration Flow - Record to Execution Loop', () => {
           });
           return true;
         }
-        if (msg.type === 17) { // SET_EXCEL_DATA
+        if (msg.type === MessageType.SET_EXCEL_DATA) {
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             StorageManager.setExcelData(msg.payload.excelRows).then(() => {
               callback({ success: true });
@@ -65,7 +66,7 @@ describe('Integration Flow - Record to Execution Loop', () => {
           });
           return true;
         }
-        if (msg.type === 18) { // ADD_LOG_ENTRY
+        if (msg.type === MessageType.ADD_LOG_ENTRY) {
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             StorageManager.addLogEntry(msg.payload.entry).then(() => {
               callback({ success: true });

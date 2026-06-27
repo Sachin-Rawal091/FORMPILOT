@@ -1,7 +1,7 @@
 import { Step, Action, LogStatus, SelectorResult } from "../../types";
 import { setInputValue, setSelectValue, setTextareaValue, setCheckboxValue, dispatchEvents } from "../domUtils";
 import { SmartWaitEngine } from "./SmartWaitEngine";
-import { WAIT_DOM_STABLE_TIMEOUT } from "../../shared/constants";
+import { WAIT_DOM_STABLE_TIMEOUT, WAIT_URL_CHANGE_TIMEOUT } from "../../shared/constants";
 import { StorageManager } from "../../storage/StorageManager";
 import { logger } from "../../utils/logger";
 
@@ -27,9 +27,11 @@ export class ExecutionEngine {
       };
     }
 
-    const hasColumn = Object.prototype.hasOwnProperty.call(rowData, step.columnName);
-    const rawValue = hasColumn ? rowData[step.columnName] : undefined;
-    const isMissing = rawValue === undefined || rawValue === null || rawValue === "";
+    const targetCol = step.columnName.trim().toLowerCase();
+    const actualKey = Object.keys(rowData).find(k => k.trim().toLowerCase() === targetCol);
+    const hasColumn = actualKey !== undefined;
+    const rawValue = hasColumn ? rowData[actualKey!] : undefined;
+    const isMissing = rawValue === undefined || rawValue === null || String(rawValue).trim() === "";
 
     // Scenarios 2 & 3: Column not found
     if (!hasColumn) {
@@ -124,16 +126,13 @@ export class ExecutionEngine {
       case Action.NAVIGATE_NEXT:
         const currentURL = window.location.href;
         dispatchEvents(el, ["mousedown", "mouseup", "click"]);
-        // Assuming WAIT_URL_CHANGE_TIMEOUT is imported or use hardcoded/SmartWaitEngine default
-        // We need to import WAIT_URL_CHANGE_TIMEOUT from constants at the top
-        await SmartWaitEngine.waitForURLChange(currentURL, 15000);
+        await SmartWaitEngine.waitForURLChange(currentURL, WAIT_URL_CHANGE_TIMEOUT);
         break;
 
       case Action.SELECT:
         if (el instanceof HTMLSelectElement) {
           setSelectValue(el, resolvedValue || "");
-          // Wait for dependent select options to populate (use DOM stability timeout, not element timeout)
-          await SmartWaitEngine.waitForSelectOptions(step.selectorMeta, step.selector, WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
+          await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
         }
         break;
 
@@ -144,7 +143,26 @@ export class ExecutionEngine {
           const escapedName = CSS.escape(nameAttr);
           const scope = el.closest('form, fieldset') || document;
           const radios = Array.from(scope.querySelectorAll(`input[type="radio"][name="${escapedName}"]`)) as HTMLInputElement[];
-          const targetRadio = radios.find(r => r.value === resolvedValue);
+          const targetRadio = radios.find(r => {
+            const valMatch = r.value.trim().toLowerCase() === resolvedValue.trim().toLowerCase();
+            if (valMatch) return true;
+            
+            // Try matching by label text
+            let labelText = "";
+            if (r.id) {
+              const labelEl = document.querySelector(`label[for="${CSS.escape(r.id)}"]`);
+              if (labelEl) {
+                labelText = labelEl.textContent || "";
+              }
+            }
+            if (!labelText) {
+              const parentLabel = r.closest('label');
+              if (parentLabel) {
+                labelText = parentLabel.textContent || "";
+              }
+            }
+            return labelText.trim().toLowerCase() === resolvedValue.trim().toLowerCase();
+          });
           if (targetRadio) {
             setCheckboxValue(targetRadio, true);
           }
@@ -153,7 +171,46 @@ export class ExecutionEngine {
 
       case Action.TOGGLE_CHECKBOX:
         if (el instanceof HTMLInputElement && el.type === "checkbox") {
-          const desiredState = step.checked !== undefined ? step.checked : true;
+          let desiredState = true;
+          
+          if (resolvedValue !== null && resolvedValue !== undefined) {
+            const lowerVal = resolvedValue.toLowerCase().trim();
+            const standardTrue = ["true", "yes", "1", "on", "checked"];
+            const standardFalse = ["false", "no", "0", "off", "unchecked"];
+            
+            if (standardTrue.includes(lowerVal)) {
+              desiredState = true;
+            } else if (standardFalse.includes(lowerVal)) {
+              desiredState = false;
+            } else {
+              // Custom value matching: e.g. "Sports, Music"
+              // We check if the checkbox's value or its label text is in the list
+              const elValue = el.value ? el.value.toLowerCase().trim() : "";
+              let labelText = "";
+              if (el.id) {
+                const labelEl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+                if (labelEl) {
+                  labelText = labelEl.textContent || "";
+                }
+              }
+              if (!labelText) {
+                const parentLabel = el.closest('label');
+                if (parentLabel) {
+                  labelText = parentLabel.textContent || "";
+                }
+              }
+              const lowerLabel = labelText.toLowerCase().trim();
+              const parts = lowerVal.split(',').map(p => p.trim());
+              
+              const hasValMatch = elValue && elValue !== "on" && (parts.includes(elValue) || lowerVal.includes(elValue));
+              const hasLabelMatch = lowerLabel && (parts.includes(lowerLabel) || parts.some(p => lowerLabel.includes(p) || p.includes(lowerLabel)));
+              
+              desiredState = !!(hasValMatch || hasLabelMatch);
+            }
+          } else {
+            desiredState = step.checked !== undefined ? step.checked : true;
+          }
+
           if (el.checked !== desiredState) {
             setCheckboxValue(el, desiredState);
           }

@@ -42,8 +42,7 @@ describe('ResponseDetectionEngine', () => {
 
     it('should return true if a CAPTCHA iframe is present', () => {
       const el = document.createElement('iframe');
-      // Use about:blank to prevent happy-dom from doing network request
-      el.src = 'about:blank#challenges.cloudflare';
+      el.setAttribute('src', 'https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/v0/abc123');
       document.body.appendChild(el);
 
       expect(ResponseDetectionEngine.detectCaptcha()).toBe(true);
@@ -192,6 +191,22 @@ describe('ResponseDetectionEngine', () => {
       vi.advanceTimersByTime(120000);
       expect(timeoutSpy).toHaveBeenCalledTimes(1);
       expect(document.getElementById('formpilot-captcha-overlay')).toBeNull(); // dismissed
+    });
+
+    it('should not create second overlay if one already exists', () => {
+      const resume1 = vi.fn();
+      const resume2 = vi.fn();
+
+      ResponseDetectionEngine.injectCaptchaOverlay(resume1, () => {});
+      ResponseDetectionEngine.injectCaptchaOverlay(resume2, () => {}); // second call
+
+      expect(document.querySelectorAll('#formpilot-captcha-overlay').length).toBe(1);
+
+      const btn = document.querySelector('#formpilot-captcha-overlay button') as HTMLButtonElement;
+      btn.click();
+
+      expect(resume1).toHaveBeenCalledTimes(1);
+      expect(resume2).not.toHaveBeenCalled();
     });
   });
 

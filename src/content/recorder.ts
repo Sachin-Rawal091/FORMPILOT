@@ -315,7 +315,7 @@ class RecordingEngine {
     const path: string[] = [];
     let current: HTMLElement | null = el;
 
-    while (current && current.nodeType === Node.ELEMENT_NODE) {
+    while (current && current !== document.body && current.nodeType === Node.ELEMENT_NODE) {
       let selector = current.nodeName.toLowerCase();
       if (current.id) {
         selector += `#${current.id}`;
@@ -381,12 +381,7 @@ class RecordingEngine {
   }
 
   private generateUUID(): string {
-    // Simple robust RFC4122 compliant UUID v4 generator
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+    return crypto.randomUUID();
   }
 }
 

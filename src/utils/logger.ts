@@ -9,7 +9,13 @@ type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 const LOG_PREFIX = '[FormPilot]';
 
 // Default to INFO in production, DEBUG in development
-const CURRENT_LEVEL: LogLevel = import.meta.env?.DEV ? 'DEBUG' : 'INFO';
+const CURRENT_LEVEL: LogLevel = (() => {
+  try {
+    return (import.meta as any)?.env?.DEV ? 'DEBUG' : 'INFO';
+  } catch {
+    return 'INFO';
+  }
+})();
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
   DEBUG: 0,

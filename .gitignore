@@ -54,7 +54,7 @@ generate_student_excel.js
 
 # ─── Issue & Bug Logs ────────────────────────────────────────────────────────
 issue.md
-tests/debug/BUG_REPORT.md
+tests/debug/
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/

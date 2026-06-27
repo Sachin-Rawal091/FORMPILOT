@@ -327,10 +327,22 @@ export class Executor {
 
       // Skip already-completed rows (from previous partial runs)
       if (row.status === RowStatus.SUCCESS || row.status === RowStatus.SKIPPED) {
-        state = await StateManager.updateState({
+        // BUG-041: Reconcile counters — if a page reload persisted the row status
+        // to IndexedDB but the completedRows/skippedRows counter in state wasn't
+        // saved yet, the counter falls behind. Fix by counting skipped-but-done rows.
+        const skipUpdates: Partial<ExecutionState> = {
           currentRowIndex: rowIdx + 1,
           currentStepIndex: 0
-        });
+        };
+        const totalProcessed = state.completedRows + state.failedRows + state.skippedRows;
+        if (totalProcessed < rowIdx + 1) {
+          if (row.status === RowStatus.SUCCESS) {
+            skipUpdates.completedRows = state.completedRows + 1;
+          } else {
+            skipUpdates.skippedRows = state.skippedRows + 1;
+          }
+        }
+        state = await StateManager.updateState(skipUpdates);
         this.broadcastStateUpdate(state);
         continue;
       }
@@ -626,7 +638,7 @@ export class Executor {
               action: step.action,
               selector: step.selector,
               selectorStrategy: res.selectorStrategy,
-              value: logStatus === "STEP_SKIPPED" ? undefined : step.value,
+              value: logStatus === "STEP_SKIPPED" ? undefined : res.resolvedValue ?? step.value,
               result: resultType,
               status: logStatus,
               retryCount: res.retriesUsed,

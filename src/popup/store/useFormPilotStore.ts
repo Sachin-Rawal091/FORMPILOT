@@ -10,7 +10,8 @@ import {
   MessageType, 
   FormPilotMessage, 
   Step,
-  UserSettings
+  UserSettings,
+  RowStatus
 } from '../../types';
 
 export type TabType = 'home' | 'recording' | 'data' | 'run' | 'logs' | 'settings';
@@ -639,6 +640,16 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
 
       const sessionId = crypto.randomUUID();
 
+      // Pre-scan excelData for existing row counts so the UI immediately shows correct stats
+      let initialCompleted = 0;
+      let initialSkipped = 0;
+      let initialFailed = 0;
+      excelData.forEach(row => {
+        if (row.status === RowStatus.SUCCESS) initialCompleted++;
+        else if (row.status === RowStatus.SKIPPED) initialSkipped++;
+        else if (row.status === RowStatus.FAILED) initialFailed++;
+      });
+
       // Initialize execution state with tab context
       const initState: ExecutionState = {
         sessionId,
@@ -647,9 +658,9 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         currentPageId: "",
         status: ExecutionStatus.RUNNING,
         totalRows: excelData.length,
-        completedRows: 0,
-        failedRows: 0,
-        skippedRows: 0,
+        completedRows: initialCompleted,
+        failedRows: initialFailed,
+        skippedRows: initialSkipped,
         pageRetryCount: 0,
         mutexLock: sessionId,
         captchaPending: false,

@@ -1,4 +1,4 @@
-import { ExecutionState, ExecutionStatus } from "../../types";
+import { ExecutionState, ExecutionStatus, RowStatus } from "../../types";
 import { StorageManager } from "../../storage/StorageManager";
 
 export class StateManager {
@@ -20,6 +20,26 @@ export class StateManager {
       throw new Error(`Active session exists (ID: ${currentState.mutexLock}). Please abort or resume it first.`);
     }
 
+    // Call log cleanup on session initialization
+    await StorageManager.cleanupLogs().catch(err => {
+      console.warn('[FormPilot] Log eviction failed:', err);
+    });
+
+    // Retrieve existing Excel row statuses to sync progress counts on session initialization
+    let initialCompleted = 0;
+    let initialSkipped = 0;
+    let initialFailed = 0;
+    try {
+      const excelRows = await StorageManager.getExcelData();
+      excelRows.forEach(row => {
+        if (row.status === RowStatus.SUCCESS) initialCompleted++;
+        else if (row.status === RowStatus.SKIPPED) initialSkipped++;
+        else if (row.status === RowStatus.FAILED) initialFailed++;
+      });
+    } catch (err) {
+      // Fallback silently to 0
+    }
+
     const newState: ExecutionState = {
       sessionId,
       currentRowIndex: 0,
@@ -27,9 +47,9 @@ export class StateManager {
       currentPageId: "",
       status: ExecutionStatus.RUNNING, // Start as RUNNING, not IDLE
       totalRows,
-      completedRows: 0,
-      failedRows: 0,
-      skippedRows: 0,
+      completedRows: initialCompleted,
+      failedRows: initialFailed,
+      skippedRows: initialSkipped,
       pageRetryCount: 0,
       mutexLock: sessionId, // Set mutex lock
       captchaPending: false,

@@ -9,6 +9,7 @@ export class ResponseDetectionEngine {
   private static countdownIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private static activeCaptchaResolver: (() => void) | null = null;
+  private static captchaResolutionPending = false;
 
   /**
    * Checks the DOM for CAPTCHA elements.
@@ -180,9 +181,20 @@ export class ResponseDetectionEngine {
    * Injects a floating Glassmorphic UI alerting user to solve CAPTCHA.
    */
   static injectCaptchaOverlay(onResume: () => void, onTimeout: () => void): void {
-    if (this.activeOverlay) {
-      this.removeCaptchaOverlay();
+    if (this.activeOverlay || this.captchaResolutionPending) {
+      return; // Already waiting for user
     }
+    this.captchaResolutionPending = true;
+
+    const wrappedOnResume = () => {
+      this.captchaResolutionPending = false;
+      onResume();
+    };
+
+    const wrappedOnTimeout = () => {
+      this.captchaResolutionPending = false;
+      onTimeout();
+    };
 
     // Create container
     const container = document.createElement("div");
@@ -296,7 +308,7 @@ export class ResponseDetectionEngine {
     
     btn.onclick = () => {
       this.removeCaptchaOverlay();
-      onResume();
+      wrappedOnResume();
     };
     container.appendChild(btn);
 
@@ -319,7 +331,7 @@ export class ResponseDetectionEngine {
 
       if (remaining <= 0) {
         this.removeCaptchaOverlay();
-        onTimeout();
+        wrappedOnTimeout();
       }
     }, 1000);
 
@@ -332,6 +344,7 @@ export class ResponseDetectionEngine {
    * Dismisses the CAPTCHA overlay and cleans up timers.
    */
   static removeCaptchaOverlay(): void {
+    this.captchaResolutionPending = false;
     if (this.countdownIntervalId) {
       clearInterval(this.countdownIntervalId);
       this.countdownIntervalId = null;

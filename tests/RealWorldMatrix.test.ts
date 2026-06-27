@@ -33,12 +33,13 @@ describe('Real-World Matrix Test Suite', () => {
     vi.restoreAllMocks();
 
     const { SmartWaitEngine } = await import('../src/content/engines/SmartWaitEngine');
+    const { MessageType } = await import('../src/types');
     vi.spyOn(SmartWaitEngine, 'waitForURLChange').mockResolvedValue(true);
 
     mockChrome.runtime.sendMessage.mockReset();
     mockChrome.runtime.sendMessage.mockImplementation((msg: any, callback?: any) => {
       if (callback) {
-        if (msg.type === 15) { // GET_RECORDING_DATA
+        if (msg.type === MessageType.GET_RECORDING_DATA) { // GET_RECORDING_DATA
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             StorageManager.getRecordings().then(recs => {
               callback({ recording: recs.find(r => r.id === msg.payload.recordingId) });
@@ -46,7 +47,7 @@ describe('Real-World Matrix Test Suite', () => {
           });
           return true;
         }
-        if (msg.type === 16) { // GET_EXCEL_DATA
+        if (msg.type === MessageType.GET_EXCEL_DATA) { // GET_EXCEL_DATA
           import('../src/storage/StorageManager').then(({ StorageManager }) => {
             if (msg.payload?.countOnly) {
               StorageManager.getExcelData().then(rows => {

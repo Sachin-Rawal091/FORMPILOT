@@ -46,6 +46,15 @@ describe('StateManager', () => {
         'Active session exists (ID: session-old). Please abort or resume it first.'
       );
     });
+
+    it('should evict logs on session init', async () => {
+      vi.spyOn(StorageManager, 'getExecutionState').mockResolvedValue(null);
+      vi.spyOn(StorageManager, 'setExecutionState').mockResolvedValue(undefined);
+      const spy = vi.spyOn(StorageManager, 'cleanupLogs').mockResolvedValue(undefined);
+
+      await StateManager.initializeSession('sess-1', 10);
+      expect(spy).toHaveBeenCalled();
+    });
   });
 
   describe('getState', () => {

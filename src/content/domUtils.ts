@@ -68,15 +68,30 @@ export function setInputValue(input: HTMLInputElement, value: string): void {
  * Sets the value of a select element, bypassing React's value setter overloads.
  */
 export function setSelectValue(select: HTMLSelectElement, value: string): void {
+  const normalizedValue = value.trim().toLowerCase();
+  
+  // Find option that matches value or text case-insensitively
+  let targetValue = value;
+  for (let i = 0; i < select.options.length; i++) {
+    const opt = select.options[i];
+    if (
+      opt.value.trim().toLowerCase() === normalizedValue ||
+      opt.text.trim().toLowerCase() === normalizedValue
+    ) {
+      targetValue = opt.value;
+      break;
+    }
+  }
+
   const nativeSelectValueSetter = Object.getOwnPropertyDescriptor(
     window.HTMLSelectElement.prototype,
     "value"
   )?.set;
 
   if (nativeSelectValueSetter) {
-    nativeSelectValueSetter.call(select, value);
+    nativeSelectValueSetter.call(select, targetValue);
   } else {
-    select.value = value;
+    select.value = targetValue;
   }
   dispatchEvents(select, ["change"]);
 }

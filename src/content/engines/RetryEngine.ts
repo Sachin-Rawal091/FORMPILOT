@@ -16,6 +16,7 @@ export interface StepExecutionResult {
   resolvedStatus?: string;
   retriesUsed: number;
   selectorStrategy?: number;
+  resolvedValue?: string;
 }
 
 export class RetryEngine {
@@ -49,7 +50,8 @@ export class RetryEngine {
       return {
         success: true, // skipped intentionally
         resolvedStatus: resolution.status,
-        retriesUsed: 0
+        retriesUsed: 0,
+        resolvedValue: resolution.value ?? undefined
       };
     }
 
@@ -77,7 +79,8 @@ export class RetryEngine {
           success: true,
           resolvedStatus: resolution.status,
           retriesUsed: attempt,
-          selectorStrategy: selectorResult.strategy
+          selectorStrategy: selectorResult.strategy,
+          resolvedValue: resolution.value ?? undefined
         };
 
       } catch (error: any) {

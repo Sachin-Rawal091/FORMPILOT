@@ -159,53 +159,115 @@ describe('ExecutionEngine.executeAction', () => {
     expect(waitSpy).toHaveBeenCalled();
   });
 
-  it('SELECT — calls setSelectValue and waitForSelectOptions', async () => {
+  it('SELECT — calls setSelectValue and waitForDOMStability', async () => {
     const sel = document.createElement('select');
     document.body.appendChild(sel);
     const setSpy = vi.spyOn(domUtils, 'setSelectValue');
-    const waitSpy = vi.spyOn(SmartWaitEngine, 'waitForSelectOptions').mockResolvedValue(true);
+    const waitSpy = vi.spyOn(SmartWaitEngine, 'waitForDOMStability').mockResolvedValue(true as any);
     await ExecutionEngine.executeAction(makeStep({ action: Action.SELECT, selectorMeta: {}, selector: '' }), makeSelectorResult(sel), 'option-value');
     expect(setSpy).toHaveBeenCalledWith(sel, 'option-value');
     expect(waitSpy).toHaveBeenCalled();
   });
 
-  it('SELECT_RADIO — selects radio by value attribute', async () => {
+  it('SELECT_RADIO — selects radio by value attribute case-insensitively', async () => {
     const form = document.createElement('form');
     const radio1 = document.createElement('input');
-    radio1.type = 'radio'; radio1.name = 'choice'; radio1.value = 'opt-a';
+    radio1.type = 'radio'; radio1.name = 'choice'; radio1.value = 'Opt-A';
     const radio2 = document.createElement('input');
-    radio2.type = 'radio'; radio2.name = 'choice'; radio2.value = 'opt-b';
+    radio2.type = 'radio'; radio2.name = 'choice'; radio2.value = 'Opt-B';
     form.appendChild(radio1); form.appendChild(radio2);
     document.body.appendChild(form);
 
     const step = makeStep({ action: Action.SELECT_RADIO });
-    await ExecutionEngine.executeAction(step, makeSelectorResult(radio1), 'opt-b');
+    await ExecutionEngine.executeAction(step, makeSelectorResult(radio1), 'opt-b ');
     expect(radio2.checked).toBe(true);
     expect(radio1.checked).toBe(false);
   });
 
-  it('TOGGLE_CHECKBOX — only clicks if state change needed', async () => {
+  it('SELECT_RADIO — selects radio by label text', async () => {
+    const form = document.createElement('form');
+    
+    // Label for id approach
+    const radio1 = document.createElement('input');
+    radio1.type = 'radio'; radio1.name = 'choice'; radio1.value = '1'; radio1.id = 'r1';
+    const label1 = document.createElement('label');
+    label1.setAttribute('for', 'r1');
+    label1.textContent = 'Option One';
+    
+    // Nested label approach
+    const label2 = document.createElement('label');
+    const radio2 = document.createElement('input');
+    radio2.type = 'radio'; radio2.name = 'choice'; radio2.value = '2';
+    label2.appendChild(radio2);
+    label2.appendChild(document.createTextNode('Option Two'));
+
+    form.appendChild(radio1);
+    form.appendChild(label1);
+    form.appendChild(label2);
+    document.body.appendChild(form);
+
+    const step = makeStep({ action: Action.SELECT_RADIO });
+    await ExecutionEngine.executeAction(step, makeSelectorResult(radio1), 'Option Two');
+    expect(radio2.checked).toBe(true);
+    expect(radio1.checked).toBe(false);
+  });
+
+  it('TOGGLE_CHECKBOX — handles standard boolean strings', async () => {
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.checked = false;
     document.body.appendChild(cb);
     const setCbSpy = vi.spyOn(domUtils, 'setCheckboxValue');
 
-    // Check it (unchecked → true)
-    const step = makeStep({ action: Action.TOGGLE_CHECKBOX, checked: true });
-    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), null);
-    // Since we mock or test setCheckboxValue's effect, we check that it was called
-    expect(setCbSpy).toHaveBeenCalledWith(cb, true);
+    const step = makeStep({ action: Action.TOGGLE_CHECKBOX });
+    
+    // Test True string
+    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), 'yes');
+    expect(setCbSpy).toHaveBeenLastCalledWith(cb, true);
+
+    // Test False string
+    cb.checked = true;
+    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), '0');
+    expect(setCbSpy).toHaveBeenLastCalledWith(cb, false);
   });
 
-  it('TOGGLE_CHECKBOX — does NOT click if state already correct', async () => {
+  it('TOGGLE_CHECKBOX — handles custom value and label matching', async () => {
+    const container = document.createElement('div');
+    
+    const label = document.createElement('label');
     const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = true;
+    cb.type = 'checkbox'; cb.value = 'sports'; cb.checked = false;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode('Sports Activities'));
+    container.appendChild(label);
+    document.body.appendChild(container);
+
+    const setCbSpy = vi.spyOn(domUtils, 'setCheckboxValue');
+    const step = makeStep({ action: Action.TOGGLE_CHECKBOX });
+
+    // Should match because 'sports' is in 'Music, Sports'
+    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), 'Music, Sports');
+    expect(setCbSpy).toHaveBeenLastCalledWith(cb, true);
+
+    // Should match by label text
+    cb.checked = false;
+    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), 'Sports Activities, Reading');
+    expect(setCbSpy).toHaveBeenLastCalledWith(cb, true);
+
+    // Should NOT match for different values
+    cb.checked = true;
+    await ExecutionEngine.executeAction(step, makeSelectorResult(cb), 'Reading, Cooking');
+    expect(setCbSpy).toHaveBeenLastCalledWith(cb, false);
+  });
+
+  it('TOGGLE_CHECKBOX — falls back to step.checked when resolvedValue is not provided', async () => {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = false;
     document.body.appendChild(cb);
-    const spy = vi.spyOn(domUtils, 'dispatchEvents');
+    const setCbSpy = vi.spyOn(domUtils, 'setCheckboxValue');
 
     const step = makeStep({ action: Action.TOGGLE_CHECKBOX, checked: true });
     await ExecutionEngine.executeAction(step, makeSelectorResult(cb), null);
-    expect(spy).not.toHaveBeenCalled();
+    expect(setCbSpy).toHaveBeenCalledWith(cb, true);
   });
 
   it('SCROLL — scrolls element into view', async () => {

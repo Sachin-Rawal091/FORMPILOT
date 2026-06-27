@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useFormPilotStore } from '../store/useFormPilotStore';
-import { LogEntry, SelectorStrategy, Recording } from '../../types';
+import { LogEntry, SelectorStrategy, Recording, Action } from '../../types';
 import { StorageManager } from '../../storage/StorageManager';
 
 export const LogScreen: React.FC = () => {
@@ -231,14 +231,25 @@ export const LogScreen: React.FC = () => {
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `formpilot_logs_${selectedSessionId || 'session'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const filename = `formpilot_logs_${selectedSessionId || 'session'}.csv`;
+
+    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.download) {
+      chrome.downloads.download({
+        url: url,
+        filename: filename,
+        saveAs: true
+      }, () => {
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      });
+    } else {
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
   };
 
   // Export JSON
@@ -248,14 +259,25 @@ export const LogScreen: React.FC = () => {
     const jsonString = JSON.stringify(activeLogs, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `formpilot_logs_${selectedSessionId || 'session'}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const filename = `formpilot_logs_${selectedSessionId || 'session'}.json`;
+
+    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.download) {
+      chrome.downloads.download({
+        url: url,
+        filename: filename,
+        saveAs: true
+      }, () => {
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      });
+    } else {
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
   };
 
   const getStatusStyle = (status: string) => {
@@ -291,6 +313,39 @@ export const LogScreen: React.FC = () => {
       case SelectorStrategy.XPATH: return 'Strict XPath Query';
       case SelectorStrategy.SHADOW_DOM: return 'Shadow DOM Traversal';
       default: return 'Dynamic query selector';
+    }
+  };
+
+  const getLogFriendlyText = (log: LogEntry) => {
+    const step = activeWorkflow?.steps.find(s => s.id === log.stepId);
+    
+    // Find friendly label name
+    let friendlyName = '';
+    if (step?.selectorMeta) {
+      const meta = step.selectorMeta;
+      friendlyName = meta.labelText || meta.placeholder || meta.ariaLabel || meta.name || '';
+    }
+    
+    friendlyName = friendlyName.trim().replace(/\s+/g, ' ');
+
+    // Fallback: If no friendly label name, clean up CSS/XPath selector slightly
+    if (!friendlyName) {
+      friendlyName = log.selector;
+    }
+
+    // Format output
+    switch (log.action) {
+      case Action.FILL:
+      case Action.SELECT:
+      case Action.SELECT_RADIO:
+        return log.value !== undefined ? `Fill "${friendlyName}" with "${log.value}"` : `Fill "${friendlyName}"`;
+      case Action.TOGGLE_CHECKBOX:
+        return `${log.value === 'true' || log.value === 'checked' ? 'Check' : 'Uncheck'} "${friendlyName}"`;
+      case Action.CLICK:
+        return `Click "${friendlyName}"`;
+      default:
+        // E.g., WAIT, SCROLL, SUBMIT
+        return `${Action[log.action] || 'Action'} on "${friendlyName}"`;
     }
   };
 
@@ -580,7 +635,7 @@ export const LogScreen: React.FC = () => {
                           <div className="flex items-center justify-between gap-2.5">
                             <div className="min-w-0">
                               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">
-                                {log.value ? `"${log.value}"` : log.selector}
+                                {getLogFriendlyText(log)}
                               </span>
                             </div>
                             <span className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider shrink-0 ${getStatusStyle(log.status)}`}>
@@ -605,7 +660,7 @@ export const LogScreen: React.FC = () => {
                       <div className="flex flex-col">
                         <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest font-mono">Event Inspector</span>
                         <span className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">
-                          Row {selectedLog.rowIndex + 1} Automation Step
+                          {getLogFriendlyText(selectedLog)}
                         </span>
                       </div>
                       <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold tracking-wide uppercase ${getStatusStyle(selectedLog.status)}`}>

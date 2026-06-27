@@ -184,7 +184,7 @@ export const RunScreen: React.FC = () => {
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                 <span className="text-[10px] text-slate-600 font-bold ml-2">stdout — active console</span>
               </div>
-              <span className="text-[10px] text-slate-600 font-mono">Row {currentRowIndex + 1}/{totalRows}</span>
+              <span className="text-[10px] text-slate-600 font-mono">Row {Math.min(currentRowIndex + 1, totalRows)}/{totalRows}</span>
             </div>
 
             {/* Terminal Body */}
@@ -201,7 +201,7 @@ export const RunScreen: React.FC = () => {
                     <div key={log.id} className="border-b border-slate-900/40 pb-2">
                       <div className="flex flex-wrap items-center gap-x-2 text-slate-400">
                         <span className="text-slate-600">[{timestampStr}]</span>
-                        <span className="text-indigo-400 font-bold">ROW {log.rowIndex + 1}</span>
+                        <span className="text-indigo-400 font-bold">ROW {log.rowIndex - 1}</span>
                         <span className="text-slate-600">|</span>
                         <span className="text-slate-300 font-bold">{actionName}</span>
                         <span className="text-slate-600">|</span>
