@@ -104,21 +104,19 @@ describe('SelectorEngine', () => {
     expect(result!.confidence).toBe(0.7);
   });
 
-  it('should find element by CSS Path fallback', () => {
+  it('should return null for CSS Path when selector is empty (redundant 0.5 layer removed)', () => {
     const div = document.createElement('div');
     div.className = 'container';
     const input = document.createElement('input');
     div.appendChild(input);
     document.body.appendChild(div);
 
-    // Note: MIN_SELECTOR_CONFIDENCE is 0.6, so we mock it for this test or expect null if not met
-    // Since we added MIN_SELECTOR_CONFIDENCE to SelectorEngine, this should return null
-    // Let's actually test that it filters out low confidence
+    // CSS Path (0.5) fallback layer is removed, so it should return null when the primary selector is empty
     const result = SelectorEngine.findElement({ cssPath: '.container > input' }, '');
-    expect(result).toBeNull(); // Because 0.5 < 0.6
+    expect(result).toBeNull();
   });
 
-  it('should find element by XPath fallback using mocked document.evaluate', () => {
+  it('should find element by XPath fallback (confidence 0.4 >= MIN_SELECTOR_CONFIDENCE)', () => {
     const input = document.createElement('input');
     input.setAttribute('id', 'xpath-id');
     document.body.appendChild(input);
@@ -131,7 +129,10 @@ describe('SelectorEngine', () => {
 
     try {
       const result = SelectorEngine.findElement({ xpath: '//input[@id="xpath-id"]' }, '');
-      expect(result).toBeNull(); // Because 0.4 < 0.6
+      expect(result).not.toBeNull();
+      expect(result!.element).toBe(input);
+      expect(result!.strategy).toBe(SelectorStrategy.XPATH);
+      expect(result!.confidence).toBe(0.4);
     } finally {
       document.evaluate = originalEvaluate;
     }

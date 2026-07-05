@@ -1,5 +1,7 @@
 import { ExecutionState, ExecutionStatus, RowStatus } from "../../types";
 import { StorageManager } from "../../storage/StorageManager";
+import { EXCEL_CHUNK_SIZE } from "../../shared/constants";
+import { logger } from "../../utils/logger";
 
 export class StateManager {
   /**
@@ -20,25 +22,35 @@ export class StateManager {
       throw new Error(`Active session exists (ID: ${currentState.mutexLock}). Please abort or resume it first.`);
     }
 
-    // Call log cleanup on session initialization
-    await StorageManager.cleanupLogs().catch(err => {
-      console.warn('[FormPilot] Log eviction failed:', err);
-    });
-
-    // Retrieve existing Excel row statuses to sync progress counts on session initialization
+    // Re-use row-status counters already persisted on the session record (set by
+    // the popup's startExecution) instead of rescanning all Excel rows in IndexedDB.
     let initialCompleted = 0;
     let initialSkipped = 0;
     let initialFailed = 0;
-    try {
-      const excelRows = await StorageManager.getExcelData();
-      excelRows.forEach(row => {
-        if (row.status === RowStatus.SUCCESS) initialCompleted++;
-        else if (row.status === RowStatus.SKIPPED) initialSkipped++;
-        else if (row.status === RowStatus.FAILED) initialFailed++;
-      });
-    } catch (err) {
-      // Fallback silently to 0
+    if (currentState && currentState.sessionId === sessionId) {
+      // Counters were already computed and persisted by the popup — reuse them.
+      initialCompleted = currentState.completedRows ?? 0;
+      initialSkipped = currentState.skippedRows ?? 0;
+      initialFailed = currentState.failedRows ?? 0;
+    } else {
+      // Fallback: no prior state for this session — scan IndexedDB paginated.
+      try {
+        const totalExcelRows = await StorageManager.getExcelDataCount();
+        for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
+          const excelRows = await StorageManager.getExcelData(offset, EXCEL_CHUNK_SIZE);
+          excelRows.forEach(row => {
+            if (row.status === RowStatus.SUCCESS) initialCompleted++;
+            else if (row.status === RowStatus.SKIPPED) initialSkipped++;
+            else if (row.status === RowStatus.FAILED) initialFailed++;
+          });
+        }
+      } catch (err) {
+        logger.warn('StateManager', 'Failed to pre-scan Excel row statuses during session initialization:', err);
+      }
     }
+
+    const existingTabContext = currentState?.tabContext ?? -1;
+    const finalTabContext = tabContext !== -1 ? tabContext : (existingTabContext !== -1 ? existingTabContext : -1);
 
     const newState: ExecutionState = {
       sessionId,
@@ -53,12 +65,18 @@ export class StateManager {
       pageRetryCount: 0,
       mutexLock: sessionId, // Set mutex lock
       captchaPending: false,
-      tabContext,
+      tabContext: finalTabContext,
       lastStepResult: "",
       recordingId: recordingId || undefined,
       siteUrl: siteUrl || undefined,
       currentUrl: window.location.href
     };
+
+    await StorageManager.addSessionMeta({
+      sessionId,
+      timestamp: Date.now(),
+      recordingId: recordingId || "default"
+    }).catch(err => logger.warn('StateManager', 'Failed to add session meta:', err));
 
     await StorageManager.setExecutionState(newState);
     return newState;

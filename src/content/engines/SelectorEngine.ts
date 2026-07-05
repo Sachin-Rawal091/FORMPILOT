@@ -2,11 +2,11 @@ import { SelectorMeta, SelectorResult, SelectorStrategy } from "../../types";
 import { SHADOW_TRAVERSAL_LIMIT, MIN_SELECTOR_CONFIDENCE } from "../../shared/constants";
 
 /**
- * 8-layer fallback Selector Engine
+ * 7-layer fallback Selector Engine
  */
 export class SelectorEngine {
   /**
-   * Tries to find an element using the 8-layer fallback strategy.
+   * Tries to find an element using the 7-layer fallback strategy.
    * Returns the first match that exceeds the confidence threshold, or null if none found.
    */
   static findElement(meta: SelectorMeta, selector: string): SelectorResult | null {
@@ -36,10 +36,12 @@ export class SelectorEngine {
       }
     }
 
-    // 2. Name (0.9 confidence)
+    // 2. Name (0.9 confidence) - only use if unique to prevent false matches in checkbox/radio groups
     if (meta.name && !bestResult) {
-      const el = document.querySelector(`[name="${CSS.escape(meta.name)}"]`);
-      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.NAME, confidence: 0.9, shadow: false });
+      const elements = Array.from(document.querySelectorAll(`[name="${CSS.escape(meta.name)}"]`));
+      if (elements.length === 1) {
+        evaluateResult({ element: elements[0], strategy: SelectorStrategy.NAME, confidence: 0.9, shadow: false });
+      }
     }
 
     // 3. Aria-label (0.85 confidence)
@@ -74,17 +76,7 @@ export class SelectorEngine {
       if (el) evaluateResult({ element: el, strategy: SelectorStrategy.PLACEHOLDER, confidence: 0.7, shadow: false });
     }
 
-    // 6. CSS Path (0.5 confidence)
-    if (meta.cssPath && !bestResult) {
-      try {
-        const el = document.querySelector(meta.cssPath);
-        if (el) evaluateResult({ element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.5, shadow: false });
-      } catch (e) {
-        // ignore invalid selector
-      }
-    }
-
-    // 7. XPath (0.4 confidence)
+    // 6. XPath (0.4 confidence)
     if (meta.xpath && !bestResult) {
       try {
         const result = document.evaluate(
@@ -107,7 +99,7 @@ export class SelectorEngine {
       }
     }
 
-    // 8. Shadow DOM (0.6 confidence)
+    // 7. Shadow DOM (0.6 confidence)
     if (!bestResult) {
       const shadowMatch = this.findInShadowDOM(meta, selector);
       if (shadowMatch) {
@@ -125,55 +117,48 @@ export class SelectorEngine {
     let elementsChecked = 0;
     let foundElement: Element | null = null;
 
-    // Only traverse inside shadow roots — regular DOM was already checked in strategies 1-7
-    const traverseShadowRoot = (root: ShadowRoot) => {
-      if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) return;
+    // Only traverse inside shadow roots — regular DOM was already checked in strategies 1-6
+    const matchesTarget = (el: Element): boolean => {
+      if (primarySelector) {
+        try {
+          if (el.matches(primarySelector)) {
+            return true;
+          }
+        } catch {
+          // Invalid primary selectors are ignored; metadata fallbacks continue.
+        }
+      }
 
-      const allElements = root.querySelectorAll("*");
-      for (let i = 0; i < allElements.length; i++) {
-        const el = allElements[i];
+      return !!(
+        (meta.id && el.id === meta.id) ||
+        (meta.name && el.getAttribute("name") === meta.name) ||
+        (meta.ariaLabel && el.getAttribute("aria-label") === meta.ariaLabel) ||
+        (meta.placeholder && el.getAttribute("placeholder") === meta.placeholder)
+      );
+    };
+
+    const walkTree = (root: Node): void => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      let current = walker.nextNode();
+
+      while (current && elementsChecked < SHADOW_TRAVERSAL_LIMIT && !foundElement) {
+        const el = current as Element;
         elementsChecked++;
 
-        if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) break;
-
-        // Try primary selector
-        if (primarySelector) {
-          try {
-            if (el.matches && el.matches(primarySelector)) {
-              foundElement = el;
-              return;
-            }
-          } catch (e) {}
-        }
-
-        // Try ID
-        if (meta.id && el.id === meta.id) {
+        if (matchesTarget(el)) {
           foundElement = el;
-          return;
+          break;
         }
 
-        // Try Name
-        if (meta.name && el.getAttribute("name") === meta.name) {
-          foundElement = el;
-          return;
-        }
-
-        // Recurse into nested shadow roots
         if (el.shadowRoot) {
-          traverseShadowRoot(el.shadowRoot);
+          walkTree(el.shadowRoot);
         }
+
+        current = walker.nextNode();
       }
     };
 
-    // Find all top-level elements with shadow roots and traverse them
-    const topLevelElements = document.querySelectorAll("*");
-    for (let i = 0; i < topLevelElements.length; i++) {
-      if (elementsChecked >= SHADOW_TRAVERSAL_LIMIT || foundElement) break;
-      const el = topLevelElements[i];
-      if (el.shadowRoot) {
-        traverseShadowRoot(el.shadowRoot);
-      }
-    }
+    walkTree(document.body || document.documentElement);
 
     if (foundElement) {
       return {

@@ -143,11 +143,14 @@ export class SmartWaitEngine {
    */
   static async waitForURLChange(currentURL: string, timeout: number): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      let timeoutTimer: ReturnType<typeof setTimeout>;
       let observer: MutationObserver;
       let resolved = false;
       const initialChildrenCount = document.body.children.length;
       let mutationCount = 0;
+
+      const startTime = Date.now();
+      let accumulatedPauseTime = 0;
+      let pauseStartTime = 0;
 
       const done = (result: boolean) => {
         if (resolved) return;
@@ -162,18 +165,54 @@ export class SmartWaitEngine {
 
       // Fallback polling for pushState/replaceState which don't fire events natively
       const pollInterval = setInterval(() => {
+        const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executor && !executor.isRunning) {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            reject(new Error("Execution aborted."));
+          }
+          return;
+        }
+
+        if (executor && executor.isPaused) {
+          if (pauseStartTime === 0) {
+            pauseStartTime = Date.now();
+          }
+          return;
+        }
+
+        if (pauseStartTime > 0) {
+          accumulatedPauseTime += Date.now() - pauseStartTime;
+          pauseStartTime = 0;
+        }
+
+        const elapsed = Date.now() - startTime - accumulatedPauseTime;
+        if (elapsed >= timeout) {
+          done(false);
+          return;
+        }
+
         if (window.location.href !== currentURL) {
           done(true);
         }
       }, 300);
 
       const checkURLChange = () => {
+        const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executor && executor.isPaused) {
+          return;
+        }
         if (window.location.href !== currentURL) {
           done(true);
         }
       };
 
       const checkDOMMutation = () => {
+        const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executor && executor.isPaused) {
+          return;
+        }
         mutationCount++;
         
         // If URL changed, resolve immediately
@@ -191,17 +230,10 @@ export class SmartWaitEngine {
           done(true);
           return;
         }
-
-        // For SPA wizard-style transitions with many subtree mutations but same body children count
-        // (e.g., display:none toggling of sections), resolve after significant mutation activity
-        if (mutationCount >= 5) {
-          done(true);
-        }
       };
 
       const cleanup = () => {
         if (observer) observer.disconnect();
-        clearTimeout(timeoutTimer);
         clearInterval(pollInterval);
         window.removeEventListener("popstate", checkURLChange);
         window.removeEventListener("hashchange", checkURLChange);
@@ -214,10 +246,6 @@ export class SmartWaitEngine {
       // Watch for DOM changes including subtree mutations (catches section toggling)
       observer = new MutationObserver(checkDOMMutation);
       observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-
-      timeoutTimer = setTimeout(() => {
-        done(false); // Timeout reached — will reject
-      }, timeout);
     });
   }
 
@@ -298,17 +326,48 @@ export class SmartWaitEngine {
   }
 
   /**
+   * Public wrapper around the internal poll loop, exposed so other engines/adapters
+   * (e.g. DatePickerEngine's click-based calendar adapters) can wait on arbitrary
+   * custom conditions — appearance of a popup, a header label changing after a click,
+   * a day cell becoming available — while remaining aware of pause/abort state,
+   * exactly like every other wait in this class.
+   */
+  static async waitForCondition<T>(conditionFn: () => T | null, timeout: number): Promise<T> {
+    return this.pollForCondition(conditionFn, timeout);
+  }
+
+  /**
    * Helper method to poll with exponential backoff.
    */
   private static async pollForCondition<T>(
     conditionFn: () => T | null,
     timeout: number
   ): Promise<T> {
-    const startTime = Date.now();
+    let startTime = Date.now();
     let pollInterval = POLL_INTERVAL_BASE;
+    let pauseStart: number | null = null;
 
     return new Promise((resolve, reject) => {
       const check = () => {
+        const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executor && !executor.isRunning) {
+          reject(new Error("Execution aborted."));
+          return;
+        }
+
+        if (executor && executor.isPaused) {
+          if (pauseStart === null) {
+            pauseStart = Date.now();
+          }
+          setTimeout(check, pollInterval);
+          return;
+        }
+
+        if (pauseStart !== null) {
+          startTime += Date.now() - pauseStart;
+          pauseStart = null;
+        }
+
         const result = conditionFn();
         if (result !== null && result !== undefined) {
           resolve(result);

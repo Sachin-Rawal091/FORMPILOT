@@ -6,12 +6,19 @@ export const CaptchaModal: React.FC = () => {
   const { executionState, resumeExecution } = useFormPilotStore();
   const [timeLeft, setTimeLeft] = useState<number>(CAPTCHA_SOLVE_TIMEOUT / 1000);
 
-  // Reset timer when a new CAPTCHA event triggers
+  // Reset timer when a new CAPTCHA event triggers, initializing from elapsed time
   useEffect(() => {
     if (executionState?.captchaPending) {
-      setTimeLeft(CAPTCHA_SOLVE_TIMEOUT / 1000);
+      let initialTime = CAPTCHA_SOLVE_TIMEOUT / 1000;
+      if (executionState.captchaStartTime) {
+        const elapsedSeconds = Math.floor((Date.now() - executionState.captchaStartTime) / 1000);
+        initialTime = Math.max(0, (CAPTCHA_SOLVE_TIMEOUT / 1000) - elapsedSeconds);
+      } else if (executionState.captchaTimeLeft !== undefined) {
+        initialTime = executionState.captchaTimeLeft;
+      }
+      setTimeLeft(initialTime);
     }
-  }, [executionState?.captchaPending]);
+  }, [executionState?.captchaPending, executionState?.captchaStartTime, executionState?.captchaTimeLeft]);
 
   // Live countdown timer linked to CAPTCHA Solve Timeout (180s)
   useEffect(() => {
@@ -54,7 +61,7 @@ export const CaptchaModal: React.FC = () => {
           </svg>
         </div>
 
-        <h3 className="mb-2 text-lg font-bold text-slate-100">CAPTCHA Detected!</h3>
+        <h3 className="mb-2 text-lg font-semibold text-slate-100">CAPTCHA Detected!</h3>
         <p className="mb-4 text-xs leading-relaxed text-slate-400">
           Form execution is suspended. Please solve the CAPTCHA block on the target form.
         </p>
@@ -81,7 +88,7 @@ export const CaptchaModal: React.FC = () => {
               strokeDashoffset={251.2 - (251.2 * percentage) / 100}
             />
           </svg>
-          <div className="absolute text-xl font-bold tracking-wider text-red-500 font-mono">
+          <div className="absolute text-xl font-semibold tracking-wider text-red-500 font-mono">
             {formatTime(timeLeft)}
           </div>
         </div>

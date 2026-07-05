@@ -1,6 +1,8 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 import { ExcelRow, RowStatus } from '../types';
 import { EXCEL_FUZZY_MAX_DISTANCE, EXCEL_EMPTY_ROW_THRESHOLD } from '../shared/constants';
+import { normalizeCellValue, sanitizeObjectKey } from './sanitize';
+
 
 export class ExcelDataEngine {
   /**
@@ -17,14 +19,20 @@ export class ExcelDataEngine {
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
     
-    // Convert to JSON
-    // defval: null ensures empty cells are returned as null rather than missing keys
-    const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+    const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: null, raw: true });
     
     const excelRows: ExcelRow[] = [];
     
     for (let i = 0; i < rawData.length; i++) {
-      const row = rawData[i] as Record<string, any>;
+      const sourceRow = rawData[i] as Record<string, unknown>;
+      const row: Record<string, string | number | boolean | null> = {};
+
+      Object.entries(sourceRow).forEach(([key, value]) => {
+        const sanitizedKey = sanitizeObjectKey(key);
+        if (sanitizedKey) {
+          row[sanitizedKey] = normalizeCellValue(value);
+        }
+      });
       
       // Calculate empty threshold to skip completely blank rows
       const keys = Object.keys(row);

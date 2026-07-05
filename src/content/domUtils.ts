@@ -39,12 +39,16 @@ export function setCheckboxValue(input: HTMLInputElement, checked: boolean): voi
     "checked"
   )?.set;
 
-  if (nativeCheckboxValueSetter) {
-    nativeCheckboxValueSetter.call(input, checked);
-  } else {
-    input.checked = checked;
-  }
-  dispatchEvents(input, ["change", "click"]);
+  const setVal = (val: boolean) => {
+    if (nativeCheckboxValueSetter) {
+      nativeCheckboxValueSetter.call(input, val);
+    } else {
+      input.checked = val;
+    }
+  };
+
+  setVal(checked);
+  dispatchEvents(input, ["change", "input"]);
 }
 /**
  * Sets the value of an input element, bypassing React's value setter overloads.

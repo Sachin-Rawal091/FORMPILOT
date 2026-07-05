@@ -262,17 +262,18 @@ describe('ResponseDetectionEngine', () => {
 
       // Allow microtasks to execute so StateManager mock runs
       await vi.waitFor(() => {
-        expect(updateSpy).toHaveBeenCalledWith({
+        expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
           status: ExecutionStatus.CAPTCHA_PAUSED,
-          captchaPending: true
-        });
+          captchaPending: true,
+          captchaStartTime: expect.any(Number)
+        }));
       });
 
-      // Verify extension sendMessage was dispatched
+      // Verify extension sendMessage was dispatched with timeLeft in payload
       expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
         type: MessageType.CAPTCHA_DETECTED,
         sessionId: 'session-123',
-        payload: {}
+        payload: { timeLeft: 180 }
       }));
 
       // Find resume button and click it to resolve the detection

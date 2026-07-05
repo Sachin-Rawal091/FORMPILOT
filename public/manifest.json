@@ -3,8 +3,17 @@
   "name": "FormPilot",
   "version": "1.0.0",
   "description": "Production-grade Chrome Extension that eliminates manual form filling at scale.",
-  "action": {},
-  "options_page": "public/popup.html",
+  "action": {
+    "default_title": "FormPilot"
+  },
+  "options_ui": {
+    "page": "public/popup.html",
+    "open_in_tab": true
+  },
+  "//": "Tailwind CSS requires 'unsafe-inline' for style injection; SheetJS/xlsx parsing requires 'wasm-unsafe-eval' for Excel operations.",
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'"
+  },
   "background": {
     "service_worker": "src/background/service-worker.ts",
     "type": "module"
@@ -21,7 +30,8 @@
     "scripting",
     "notifications",
     "tabs",
-    "downloads"
+    "downloads",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"

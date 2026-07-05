@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 import { ExcelDataEngine } from '../src/utils/ExcelDataEngine';
 import { RowStatus } from '../src/types';
+import { normalizeCellValue, sanitizeObjectKey } from '../src/utils/sanitize';
 
-vi.mock('xlsx', async (importOriginal) => {
-  const original = await importOriginal<typeof import('xlsx')>();
+vi.mock('@e965/xlsx', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@e965/xlsx')>();
   return {
     ...original,
     read: (data: any, opts: any) => {
@@ -64,6 +65,25 @@ describe('ExcelDataEngine', () => {
       expect(parsed[1].data.Name).toBe('Rawal');
     });
 
+    it('should preserve safe text while sanitizing unsafe keys and control characters', async () => {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['Company', 'Bio', '__proto__', 'constructor', 'prototype'],
+        ['AT&T <Acme>', 'Line\r\nTwo\u0000', 'polluted', 'bad', 'bad']
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+
+      const parsed = await ExcelDataEngine.parseExcelFile(buffer);
+
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].data.Company).toBe('AT&T <Acme>');
+      expect(parsed[0].data.Bio).toBe('Line\nTwo');
+      expect(Object.prototype.hasOwnProperty.call(parsed[0].data, '__proto__')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(parsed[0].data, 'constructor')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(parsed[0].data, 'prototype')).toBe(false);
+    });
+
     it('should throw an error if the workbook has no sheets', async () => {
       // Pass the 999-byte empty buffer to trigger our mock in read()
       const fakeBuffer = new ArrayBuffer(999);
@@ -88,6 +108,15 @@ describe('ExcelDataEngine', () => {
     it('should return null for empty/null targets or empty available columns', () => {
       expect(ExcelDataEngine.fuzzyMatchColumn('', available)).toBeNull();
       expect(ExcelDataEngine.fuzzyMatchColumn('Age', [])).toBeNull();
+    });
+  });
+
+  describe('sanitization helpers', () => {
+    it('should reject unsafe object keys and preserve legitimate display characters', () => {
+      expect(sanitizeObjectKey('__proto__')).toBeNull();
+      expect(sanitizeObjectKey('constructor')).toBeNull();
+      expect(sanitizeObjectKey(' Company ')).toBe('Company');
+      expect(normalizeCellValue('AT&T <Acme>\u0000')).toBe('AT&T <Acme>');
     });
   });
 });

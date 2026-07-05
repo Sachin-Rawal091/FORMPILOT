@@ -60,6 +60,16 @@ export class RetryEngine {
     let currentBackoff = RETRY_BACKOFF_BASE;
 
     while (attempt <= maxRetries) {
+      const executorStart = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+      if (executorStart && !executorStart.isRunning) {
+        return {
+          success: false,
+          error: new Error("Execution aborted."),
+          classification: ErrorClassification.FATAL,
+          resolvedStatus: "FAILED",
+          retriesUsed: attempt
+        };
+      }
       try {
         // 2. Find Element using SmartWait (which internally uses SelectorEngine 8-layer fallback)
         const selectorResult = await SmartWaitEngine.waitForElementVisible(
@@ -84,6 +94,15 @@ export class RetryEngine {
         };
 
       } catch (error: any) {
+        if (error.message === "Execution aborted.") {
+          return {
+            success: false,
+            error,
+            classification: ErrorClassification.FATAL,
+            resolvedStatus: "FAILED",
+            retriesUsed: attempt
+          };
+        }
         const classification = this.classifyError(error, step);
         
         if (classification === ErrorClassification.FATAL) {
@@ -119,7 +138,32 @@ export class RetryEngine {
         }
 
         // Apply backoff before next attempt
-        await new Promise((resolve) => setTimeout(resolve, currentBackoff));
+        const executorBefore = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executorBefore && !executorBefore.isRunning) {
+          throw new Error("Execution aborted.");
+        }
+
+        // Sleep in chunks of 200ms to remain responsive to pause/abort
+        let slept = 0;
+        while (slept < currentBackoff) {
+          const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+          if (executor && !executor.isRunning) {
+            throw new Error("Execution aborted.");
+          }
+          if (executor && executor.isPaused) {
+            // While paused, do not increment slept, just wait
+            await new Promise((r) => setTimeout(r, 200));
+            continue;
+          }
+          await new Promise((r) => setTimeout(r, 200));
+          slept += 200;
+        }
+
+        const executorAfter = (globalThis as any).__FP_EXECUTOR_INSTANCE__;
+        if (executorAfter && !executorAfter.isRunning) {
+          throw new Error("Execution aborted.");
+        }
+
         currentBackoff = Math.min(currentBackoff * 2, RETRY_BACKOFF_MAX);
       }
     }

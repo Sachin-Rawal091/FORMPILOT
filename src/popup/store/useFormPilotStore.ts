@@ -1,64 +1,22 @@
 import { create } from 'zustand';
+import { createNavSlice, NavSlice, TabType } from './slices/navSlice';
+import { createRecordingSlice, RecordingSlice } from './slices/recordingSlice';
+import { createDataSlice, DataSlice } from './slices/dataSlice';
+import { createExecutionSlice, ExecutionSlice } from './slices/executionSlice';
+import { createSettingsSlice, SettingsSlice } from './slices/settingsSlice';
+
 import { StorageManager } from '../../storage/StorageManager';
-import { ExcelDataEngine } from '../../utils/ExcelDataEngine';
 import { 
-  Recording, 
-  ExcelRow, 
   ExecutionState, 
-  LogEntry, 
   ExecutionStatus, 
   MessageType, 
   FormPilotMessage, 
-  Step,
-  UserSettings,
-  RowStatus
+  Step
 } from '../../types';
+import { logger } from '../../utils/logger';
+import { CAPTCHA_SOLVE_TIMEOUT } from '../../shared/constants';
 
-export type TabType = 'home' | 'recording' | 'data' | 'run' | 'logs' | 'settings';
-
-interface FormPilotStoreState {
-  // Navigation / Tabs
-  activeTab: TabType;
-  setActiveTab: (tab: TabType) => void;
-
-  // Recordings
-  recordings: Recording[];
-  selectedRecording: Recording | null;
-  setSelectedRecording: (recording: Recording | null) => void;
-  loadRecordings: () => Promise<void>;
-  startRecording: (url: string) => Promise<void>;
-  stopRecording: (name: string) => Promise<void>;
-  deleteRecording: (id: string) => Promise<void>;
-
-  // Recording Live Capture
-  activeRecordingSteps: Step[];
-  activeRecordingUrl: string;
-  isRecording: boolean;
-
-  // Excel Upload & Mapping
-  excelData: ExcelRow[];
-  excelHeaders: string[];
-  fuzzyMapping: Record<string, string>; // step.id -> excelColumnName
-  isExcelLoading: boolean;
-  parseExcel: (file: File) => Promise<void>;
-  setMapping: (stepId: string, columnName: string) => void;
-  saveMappings: () => Promise<void>;
-
-  // Execution & Mutex
-  executionState: ExecutionState | null;
-  recentLogs: LogEntry[];
-  loadExecutionState: () => Promise<ExecutionState | null>;
-  loadLogs: (sessionId: string) => Promise<void>;
-  startExecution: () => Promise<void>;
-  pauseExecution: () => Promise<void>;
-  resumeExecution: () => Promise<void>;
-  abortExecution: () => Promise<void>;
-
-  // User Settings & Theme
-  settings: UserSettings;
-  updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
-  setTheme: (theme: 'light' | 'dark') => Promise<void>;
-
+interface FormPilotStoreState extends NavSlice, RecordingSlice, DataSlice, ExecutionSlice, SettingsSlice {
   // Initialization & Message Bus Listener
   initStore: () => Promise<void>;
   cleanupStoreListener: (() => void) | null;
@@ -68,59 +26,20 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
   let messageListener: ((message: any, sender: any, sendResponse: any) => void) | null = null;
 
   return {
-    // Nav
-    activeTab: 'home',
-    setActiveTab: (tab) => set({ activeTab: tab }),
+    // Nav Slice
+    ...createNavSlice(set, get, {} as any),
 
-    // Recordings
-    recordings: [],
-    selectedRecording: null,
-    setSelectedRecording: (recording) => set({ selectedRecording: recording }),
+    // Recording Slice
+    ...createRecordingSlice(set, get, {} as any),
 
-    // Recording State
-    activeRecordingSteps: [],
-    activeRecordingUrl: '',
-    isRecording: false,
+    // Data Slice
+    ...createDataSlice(set, get, {} as any),
 
-    // Excel & Mapping State
-    excelData: [],
-    excelHeaders: [],
-    fuzzyMapping: {},
-    isExcelLoading: false,
+    // Execution Slice
+    ...createExecutionSlice(set, get, {} as any),
 
-    // Execution & Logs
-    executionState: null,
-    recentLogs: [],
-
-    // Settings & Theme
-    settings: {
-      stepDelay: 100,
-      maxStepRetries: 3,
-      waitElementTimeout: 10000,
-      logMaxEntries: 1000,
-      logRetentionDays: 30,
-      theme: 'dark'
-    },
-
-    updateSettings: async (newSettings) => {
-      const current = get().settings;
-      const updated = { ...current, ...newSettings };
-      set({ settings: updated });
-      await StorageManager.setUserSettings(updated);
-    },
-
-    setTheme: async (theme) => {
-      const current = get().settings;
-      const updated = { ...current, theme };
-      set({ settings: updated });
-      await StorageManager.setUserSettings(updated);
-      
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    },
+    // Settings Slice
+    ...createSettingsSlice(set, get, {} as any),
 
     // Init & Listeners
     cleanupStoreListener: null,
@@ -135,12 +54,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
       // 2b. Hydrate active recording state
       try {
         const activeRec = await StorageManager.getRecordingState();
-        console.log("initStore: Hydrating recording state:", {
-          hasState: !!activeRec,
-          isRecording: activeRec?.isRecording,
-          stepCount: activeRec?.activeRecordingSteps?.length,
-          url: activeRec?.activeRecordingUrl
-        });
         if (activeRec && activeRec.isRecording) {
           set({
             isRecording: true,
@@ -150,7 +63,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
           });
         }
       } catch (err) {
-        console.error("Zustand: Failed to hydrate recording state:", err);
+        logger.error('FormPilotStore', 'Failed to hydrate recording state:', err);
       }
 
       // 2c. Hydrate user settings and theme
@@ -174,7 +87,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
           document.documentElement.classList.remove('dark');
         }
       } catch (err) {
-        console.error("Zustand: Failed to hydrate settings:", err);
+        logger.error('FormPilotStore', 'Failed to hydrate settings:', err);
       }
 
       // 3. Register Chrome message channel listener
@@ -194,7 +107,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
           return false;
         }
 
-        console.log("Zustand store caught message:", message.type);
+        logger.debug('FormPilotStore', `Caught message: ${MessageType[message.type]}`);
         
         switch (message.type) {
           case MessageType.STATE_UPDATE:
@@ -214,7 +127,18 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
             }
             break;
 
-          case MessageType.RECORDING_EVENT:
+          case MessageType.RECORDING_EVENT: {
+            // Ignore recording events if execution is active
+            const currentExecState = get().executionState;
+            const isExecActive = currentExecState && (
+              currentExecState.status === ExecutionStatus.RUNNING ||
+              currentExecState.status === ExecutionStatus.PAUSED ||
+              currentExecState.status === ExecutionStatus.CAPTCHA_PAUSED
+            );
+            if (isExecActive) {
+              logger.warn('FormPilotStore', 'Ignored RECORDING_EVENT because execution is active.');
+              break;
+            }
             if (message.payload?.step) {
               const step = message.payload.step as Step;
               const url = message.payload.url as string;
@@ -225,6 +149,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               }));
             }
             break;
+          }
 
           case MessageType.EXECUTION_COMPLETE:
             if (message.payload?.state) {
@@ -232,543 +157,52 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               set({ executionState: finalState });
               get().loadLogs(finalState.sessionId);
               
-              StorageManager.getExcelData().then(freshRows => {
-                if (freshRows && freshRows.length > 0) {
-                  set({ excelData: freshRows });
+              // Only refresh the row count — never pull the full table into the popup
+              StorageManager.getExcelDataCount().then(count => {
+                if (count > 0) {
+                  set({ excelRowCount: count });
                 }
               }).catch(err => {
-                console.error("Zustand: Failed to re-sync excelData on EXECUTION_COMPLETE:", err);
+                logger.error('FormPilotStore', 'Failed to re-sync excelRowCount on EXECUTION_COMPLETE:', err);
               });
             }
             break;
 
           case MessageType.CAPTCHA_DETECTED:
+            const msgPayload = message.payload as { timeLeft?: number };
             set((prev) => {
               if (prev.executionState) {
                 return {
                   executionState: {
                     ...prev.executionState,
+                    captchaPending: true,
                     status: ExecutionStatus.CAPTCHA_PAUSED,
-                    captchaPending: true
-                  }
+                    captchaTimeLeft: msgPayload?.timeLeft ?? (CAPTCHA_SOLVE_TIMEOUT / 1000)
+                  },
+                  activeTab: 'run'
                 };
               }
-              return {};
+              return prev;
             });
             break;
         }
 
-        sendResponse({ ack: true });
+        sendResponse({ received: true });
         return true;
       };
 
       chrome.runtime.onMessage.addListener(messageListener);
-
-      // Listen for local storage updates in other tabs
-      const storageListener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
-        if (areaName === 'local' && changes.settings) {
-          const newSettings = changes.settings.newValue || {};
-          const currentSettings = get().settings;
-          const merged = { ...currentSettings, ...newSettings };
-          set({ settings: merged });
-          
-          if (merged.theme === 'dark') {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        }
-      };
-      chrome.storage.onChanged.addListener(storageListener);
-
+      
       set({
         cleanupStoreListener: () => {
           if (messageListener) {
             chrome.runtime.onMessage.removeListener(messageListener);
             messageListener = null;
           }
-          chrome.storage.onChanged.removeListener(storageListener);
         }
       });
-    },
-
-    loadRecordings: async () => {
-      try {
-        const list = await StorageManager.getRecordings();
-        set({ recordings: list });
-      } catch (err) {
-        console.error("Failed to load recordings from IDB:", err);
-      }
-    },
-
-    loadExecutionState: async () => {
-      try {
-        const state = await StorageManager.getExecutionState();
-        set({ executionState: state });
-
-        // If there's an active running session, sync and redirect UI to Run Screen
-        if (state && (
-          state.status === ExecutionStatus.RUNNING ||
-          state.status === ExecutionStatus.PAUSED ||
-          state.status === ExecutionStatus.CAPTCHA_PAUSED
-        )) {
-          set({ activeTab: 'run' });
-          await get().loadLogs(state.sessionId);
-        }
-        return state;
-      } catch (err) {
-        console.error("Failed to load ExecutionState:", err);
-        return null;
-      }
-    },
-
-    loadLogs: async (sessionId: string) => {
-      try {
-        const logs = await StorageManager.getLogs(sessionId);
-        // Sort logs descending by timestamp
-        set({ recentLogs: logs.sort((a, b) => b.timestamp - a.timestamp) });
-      } catch (err) {
-        console.error("Failed to load logs:", err);
-      }
-    },
-
-    // Recording Controls
-    startRecording: async (url: string) => {
-      const recordingId = crypto.randomUUID();
-      
-      set({
-        activeRecordingSteps: [],
-        activeRecordingUrl: url,
-        isRecording: true,
-        activeTab: 'recording'
-      });
-
-      // Create a new tab and navigate to the target URL
-      chrome.tabs.create({ url, active: true }, (tab) => {
-        if (tab?.id) {
-          // Broadcast START_RECORDING to service worker with the new tab's ID context
-          const message: FormPilotMessage = {
-            type: MessageType.START_RECORDING,
-            sessionId: recordingId,
-            payload: { recordingId, url },
-            tabId: tab.id,
-            timestamp: Date.now()
-          };
-          
-          chrome.runtime.sendMessage(message).catch(err => {
-            console.error("Could not broadcast START_RECORDING:", err);
-          });
-        }
-      });
-    },
-
-    stopRecording: async (name: string) => {
-      const { recordings } = get();
-
-      // 1. Read steps from persistent session storage FIRST (before any STOP signal)
-      // This is the source of truth because the service worker persists every step here,
-      // even when the popup was closed during recording.
-      let steps: Step[] = [];
-      let url = get().activeRecordingUrl;
-      
-      try {
-        const recordingState = await StorageManager.getRecordingState();
-        console.log("stopRecording: Read recording state from session storage:", {
-          hasState: !!recordingState,
-          isRecording: recordingState?.isRecording,
-          stepCount: recordingState?.activeRecordingSteps?.length,
-          url: recordingState?.activeRecordingUrl
-        });
-        
-        if (recordingState && recordingState.activeRecordingSteps.length > 0) {
-          steps = recordingState.activeRecordingSteps;
-          url = recordingState.activeRecordingUrl || url;
-        }
-      } catch (err) {
-        console.error("Zustand: Failed to read recording state from session storage:", err);
-      }
-
-      // 2. Merge with in-memory steps (popup may have received some RECORDING_EVENTs directly)
-      const inMemorySteps = get().activeRecordingSteps;
-      if (steps.length === 0 && inMemorySteps.length > 0) {
-        console.log("stopRecording: Using in-memory steps as fallback. Count:", inMemorySteps.length);
-        steps = inMemorySteps;
-        url = get().activeRecordingUrl || url;
-      } else if (inMemorySteps.length > steps.length) {
-        // In-memory has MORE steps (popup was open the whole time and received all events)
-        console.log("stopRecording: In-memory has more steps. Using in-memory:", inMemorySteps.length, "vs session:", steps.length);
-        steps = inMemorySteps;
-      }
-
-      // 3. NOW send the STOP signal to the content script (after we've safely read the data)
-      try {
-        const stopMsg: FormPilotMessage = {
-          type: MessageType.STOP_RECORDING,
-          sessionId: crypto.randomUUID(),
-          payload: {},
-          timestamp: Date.now()
-        };
-        await chrome.runtime.sendMessage(stopMsg).catch(() => {});
-      } catch {
-        // Non-critical — recording will stop when page reloads anyway
-      }
-
-      console.log("stopRecording: Final step count to save:", steps.length, "URL:", url);
-
-      // 4. If no steps were captured, just reset state and go home
-      if (steps.length === 0) {
-        console.warn("stopRecording: No steps captured. Clearing state without saving.");
-        try { await StorageManager.clearRecordingState(); } catch {}
-        set({ isRecording: false, activeTab: 'home', activeRecordingSteps: [], activeRecordingUrl: '' });
-        return;
-      }
-
-      // 5. Group steps into distinct pages
-      const pagesMap = new Map<string, string>();
-      steps.forEach(step => {
-        if (step.pageId && !pagesMap.has(step.pageId)) {
-          pagesMap.set(step.pageId, step.pageId);
-        }
-      });
-
-      const pages = Array.from(pagesMap.entries()).map(([id, pattern]) => ({
-        id,
-        urlPattern: pattern
-      }));
-
-      // 6. Derive siteId from host URL
-      let siteId = "generic";
-      try {
-        siteId = new URL(url).hostname;
-      } catch {}
-
-      // 7. Build the Recording object
-      const newRecording: Recording = {
-        id: crypto.randomUUID(),
-        name: name || `Recording on ${new Date().toLocaleDateString()}`,
-        siteUrl: url,
-        siteId,
-        steps: steps,
-        pages,
-        pageCount: pages.length || 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        version: 1
-      };
-
-      // 8. Persist to IndexedDB
-      try {
-        const updatedRecordings = [...recordings, newRecording];
-        await StorageManager.setRecordings(updatedRecordings);
-        console.log("stopRecording: Successfully saved recording to IndexedDB:", newRecording.name, "with", steps.length, "steps");
-        
-        // 9. Only clear session storage AFTER successful IndexedDB write
-        try { await StorageManager.clearRecordingState(); } catch {}
-
-        set({
-          recordings: updatedRecordings,
-          selectedRecording: newRecording,
-          isRecording: false,
-          activeRecordingSteps: [],
-          activeRecordingUrl: '',
-          activeTab: 'home'
-        });
-      } catch (err) {
-        console.error("stopRecording: CRITICAL — Failed to save recording to IndexedDB:", err);
-        // Don't clear session storage so user can retry
-        set({ isRecording: false, activeTab: 'home', activeRecordingSteps: [], activeRecordingUrl: '' });
-      }
-    },
-
-    deleteRecording: async (id: string) => {
-      const list = get().recordings.filter(rec => rec.id !== id);
-      await StorageManager.setRecordings(list);
-      set((prev) => ({
-        recordings: list,
-        selectedRecording: prev.selectedRecording?.id === id ? null : prev.selectedRecording
-      }));
-    },
-
-    // Excel Parsers & Mappings
-    parseExcel: async (file: File) => {
-      set({ isExcelLoading: true });
-      try {
-        const buffer = await file.arrayBuffer();
-        const rows = await ExcelDataEngine.parseExcelFile(buffer);
-        
-        await StorageManager.setExcelData(rows);
-
-        // Get headers from first row data
-        let headers: string[] = [];
-        if (rows.length > 0) {
-          headers = Object.keys(rows[0].data);
-        }
-
-        // Initialize fuzzy mapping for steps of currently selected recording
-        const selected = get().selectedRecording;
-        const mapping: Record<string, string> = {};
-
-        if (selected && headers.length > 0) {
-          selected.steps.forEach(step => {
-            // Fuzzy match using label text first (matches Excel headers), then fallback to value
-            const targetName = step.columnName || step.selectorMeta?.labelText || step.selectorMeta?.placeholder || step.selectorMeta?.name || step.value || "";
-            if (targetName) {
-              // Strip placeholder brackets {{ }} if they exist
-              const cleanTarget = targetName.replace(/[{}]/g, '').trim();
-              const match = ExcelDataEngine.fuzzyMatchColumn(cleanTarget, headers);
-              if (match) {
-                mapping[step.id] = match;
-              }
-            }
-          });
-        }
-
-        set({
-          excelData: rows,
-          excelHeaders: headers,
-          fuzzyMapping: mapping,
-          isExcelLoading: false,
-          activeTab: 'data'
-        });
-      } catch (err) {
-        set({ isExcelLoading: false });
-        console.error("Excel parse failed:", err);
-        throw err;
-      }
-    },
-
-    setMapping: (stepId: string, columnName: string) => {
-      set((prev) => ({
-        fuzzyMapping: {
-          ...prev.fuzzyMapping,
-          [stepId]: columnName
-        }
-      }));
-    },
-
-    saveMappings: async () => {
-      const { selectedRecording, fuzzyMapping, recordings } = get();
-      if (!selectedRecording) return;
-
-      // Map column headers directly into Step objects
-      const updatedSteps = selectedRecording.steps.map(step => {
-        const mappedCol = fuzzyMapping[step.id];
-        return {
-          ...step,
-          columnName: mappedCol || undefined,
-          value: mappedCol ? `{{${mappedCol}}}` : step.value
-        };
-      });
-
-      const updatedRecording = {
-        ...selectedRecording,
-        steps: updatedSteps,
-        updatedAt: Date.now()
-      };
-
-      const updatedRecordings = recordings.map(rec => 
-        rec.id === updatedRecording.id ? updatedRecording : rec
-      );
-
-      await StorageManager.setRecordings(updatedRecordings);
-      set({
-        recordings: updatedRecordings,
-        selectedRecording: updatedRecording
-      });
-    },
-
-    // Execution Queue Controls
-    startExecution: async () => {
-      const { selectedRecording, excelData } = get();
-      if (!selectedRecording) {
-        throw new Error("No recording selected for automation.");
-      }
-      if (excelData.length === 0) {
-        throw new Error("No spreadsheet loaded. Please upload Excel data first.");
-      }
-
-      // 1. Double check mutex state from current sessions
-      const currentSessionState = await StorageManager.getExecutionState();
-      if (currentSessionState && currentSessionState.mutexLock !== null) {
-        throw new Error("Another automation session is active. You must abort it first.");
-      }
-
-      // Save mapping changes before starting
-      await get().saveMappings();
-
-      // 2. Determine target tab: last active web tab, fallback to open web tabs, or fail
-      const currentTab = await new Promise<chrome.tabs.Tab | undefined>((resolve) => {
-        chrome.tabs.getCurrent(resolve);
-      });
-      const currentTabId = currentTab?.id;
-
-      let targetTabId: number | null = null;
-
-      // Check lastActiveWebTabId
-      const localData = await chrome.storage.local.get('lastActiveWebTabId');
-      const lastActiveWebTabId = localData.lastActiveWebTabId as number | undefined;
-
-      if (typeof lastActiveWebTabId === 'number' && lastActiveWebTabId !== currentTabId) {
-        try {
-          const tab = await chrome.tabs.get(lastActiveWebTabId);
-          if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
-            targetTabId = tab.id;
-          }
-        } catch {
-          // Tab closed or inaccessible
-        }
-      }
-
-      // Fallback: Find another web tab in the current window
-      if (!targetTabId) {
-        const tabs = await chrome.tabs.query({ currentWindow: true });
-        const fallbackTab = tabs.find(tab => 
-          tab.id && 
-          tab.id !== currentTabId && 
-          tab.url && 
-          (tab.url.startsWith('http://') || tab.url.startsWith('https://'))
-        );
-        if (fallbackTab && fallbackTab.id) {
-          targetTabId = fallbackTab.id;
-        }
-      }
-
-      // Safeguard: If no valid web page tab is open, stop and show alert
-      if (!targetTabId) {
-        throw new Error("Please open a web page tab before running automation.");
-      }
-
-      const sessionId = crypto.randomUUID();
-
-      // Pre-scan excelData for existing row counts so the UI immediately shows correct stats
-      let initialCompleted = 0;
-      let initialSkipped = 0;
-      let initialFailed = 0;
-      excelData.forEach(row => {
-        if (row.status === RowStatus.SUCCESS) initialCompleted++;
-        else if (row.status === RowStatus.SKIPPED) initialSkipped++;
-        else if (row.status === RowStatus.FAILED) initialFailed++;
-      });
-
-      // Initialize execution state with tab context
-      const initState: ExecutionState = {
-        sessionId,
-        currentRowIndex: 0,
-        currentStepIndex: 0,
-        currentPageId: "",
-        status: ExecutionStatus.RUNNING,
-        totalRows: excelData.length,
-        completedRows: initialCompleted,
-        failedRows: initialFailed,
-        skippedRows: initialSkipped,
-        pageRetryCount: 0,
-        mutexLock: sessionId,
-        captchaPending: false,
-        tabContext: targetTabId,
-        lastStepResult: "",
-        recordingId: selectedRecording.id,
-        siteUrl: selectedRecording.siteUrl,
-        currentUrl: selectedRecording.siteUrl
-      };
-
-      await StorageManager.setExecutionState(initState);
-      set({
-        executionState: initState,
-        recentLogs: [],
-        activeTab: 'run'
-      });
-
-      // 3. Update target tab URL without activating it to keep dashboard focused
-      chrome.tabs.update(targetTabId, { url: selectedRecording.siteUrl, active: false }, () => {
-        // Content script's checkAutoResume() automatically starts processing when the page loads
-      });
-    },
-
-    pauseExecution: async () => {
-      const { executionState } = get();
-      if (!executionState) return;
-
-      // Resolve tabId so the service worker can route to the content script
-      let targetTabId = executionState.tabContext;
-      if (!targetTabId || targetTabId === -1) {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        targetTabId = tabs[0]?.id || -1;
-      }
-
-      const pauseMsg: FormPilotMessage = {
-        type: MessageType.PAUSE_EXECUTION,
-        sessionId: executionState.sessionId,
-        payload: {},
-        tabId: targetTabId,
-        timestamp: Date.now()
-      };
-
-      await chrome.runtime.sendMessage(pauseMsg).catch(() => {});
-      
-      const updatedState = {
-        ...executionState,
-        status: ExecutionStatus.PAUSED
-      };
-      await StorageManager.setExecutionState(updatedState);
-      set({ executionState: updatedState });
-    },
-
-    resumeExecution: async () => {
-      const { executionState } = get();
-      if (!executionState) return;
-
-      // Resolve tabId so the service worker can route to the content script
-      let targetTabId = executionState.tabContext;
-      if (!targetTabId || targetTabId === -1) {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        targetTabId = tabs[0]?.id || -1;
-      }
-
-      const resumeMsg: FormPilotMessage = {
-        type: MessageType.RESUME_EXECUTION,
-        sessionId: executionState.sessionId,
-        payload: {},
-        tabId: targetTabId,
-        timestamp: Date.now()
-      };
-
-      await chrome.runtime.sendMessage(resumeMsg).catch(() => {});
-      
-      const updatedState = {
-        ...executionState,
-        status: ExecutionStatus.RUNNING,
-        captchaPending: false
-      };
-      await StorageManager.setExecutionState(updatedState);
-      set({ executionState: updatedState });
-    },
-
-    abortExecution: async () => {
-      const { executionState } = get();
-
-      // Resolve tabId so the service worker can route to the content script
-      let targetTabId = executionState?.tabContext;
-      if (!targetTabId || targetTabId === -1) {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        targetTabId = tabs[0]?.id || -1;
-      }
-
-      if (executionState) {
-        const abortMsg: FormPilotMessage = {
-          type: MessageType.ABORT_EXECUTION,
-          sessionId: executionState.sessionId,
-          payload: {},
-          tabId: targetTabId,
-          timestamp: Date.now()
-        };
-
-        await chrome.runtime.sendMessage(abortMsg).catch(() => {});
-      }
-
-      // Always clear execution state — even if message fails to reach content script,
-      // ensure the popup releases the mutex and resets the UI.
-      await StorageManager.clearExecutionState();
-      set({ executionState: null, activeTab: 'home' });
-    },
+    }
   };
 });
+
+export type { TabType };

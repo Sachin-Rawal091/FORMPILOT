@@ -1,5 +1,64 @@
 @import "@fontsource/outfit";
 @import "@fontsource/inter";
+@import "@fontsource/jetbrains-mono";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    @apply antialiased selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-slate-900;
+  }
+}
+
+/* Custom Webkit scrollbar styling for premium compact look */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 99px;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Custom Range Slider styling to match premium Payflow dark thumb */
+input[type="range"]::-webkit-slider-thumb {
+  background-color: #0e0c0c;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  height: 16px;
+  width: 16px;
+  -webkit-appearance: none;
+  margin-top: -5px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.1s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.dark input[type="range"]::-webkit-slider-thumb {
+  background-color: #ffffff;
+  border: 2px solid #0e0c0c;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+}

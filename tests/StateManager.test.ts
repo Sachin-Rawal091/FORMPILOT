@@ -47,13 +47,16 @@ describe('StateManager', () => {
       );
     });
 
-    it('should evict logs on session init', async () => {
+    it('should register session metadata on session init', async () => {
       vi.spyOn(StorageManager, 'getExecutionState').mockResolvedValue(null);
       vi.spyOn(StorageManager, 'setExecutionState').mockResolvedValue(undefined);
-      const spy = vi.spyOn(StorageManager, 'cleanupLogs').mockResolvedValue(undefined);
+      const spy = vi.spyOn(StorageManager, 'addSessionMeta').mockResolvedValue(undefined);
 
-      await StateManager.initializeSession('sess-1', 10);
-      expect(spy).toHaveBeenCalled();
+      await StateManager.initializeSession('sess-1', 10, 'recording-1');
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+        sessionId: 'sess-1',
+        recordingId: 'recording-1'
+      }));
     });
   });
 

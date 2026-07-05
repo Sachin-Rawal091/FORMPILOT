@@ -258,7 +258,8 @@ describe('Integration Flow - Record to Execution Loop', () => {
     // Start Execution
     // Integration test starts manually for flow
     const { Executor } = await import('../src/content/executor');
-    const executor = new Executor();
+    const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__ || new Executor();
+    sessionStorage.setItem('__fp_reset_done_session-123', 'true');
     
     // Simulate background start
     executor.start('flow-abc', 'session-123');

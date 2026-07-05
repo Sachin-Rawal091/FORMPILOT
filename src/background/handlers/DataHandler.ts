@@ -32,6 +32,11 @@ export class DataHandler {
 
   static async handleSetExecutionState(message: FormPilotMessage, sendResponse: (response: any) => void) {
     const payload = message.payload as { state: any };
+    if (payload && payload.state && typeof message.tabId === 'number' && message.tabId >= 0) {
+      if (payload.state.tabContext === undefined || payload.state.tabContext === -1) {
+        payload.state.tabContext = message.tabId;
+      }
+    }
     StorageManager.setExecutionState(payload.state)
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ error: err.message }));

@@ -39,36 +39,41 @@ export class ResponseDetectionEngine {
     // (direct DOM was already checked above via document.querySelector)
     let shadowFound = false;
     let checkedCount = 0;
-    const traverseShadow = (root: ShadowRoot) => {
-      if (shadowFound || checkedCount > 200) return;
-      const all = root.querySelectorAll("*");
-      for (let i = 0; i < all.length; i++) {
-        const el = all[i];
-        checkedCount++;
-        if (checkedCount > 200 || shadowFound) break;
-
-        for (const selector of captchaSelectors) {
-          if (el.matches && el.matches(selector)) {
-            shadowFound = true;
-            return;
+    const matchesCaptcha = (el: Element): boolean => {
+      for (const selector of captchaSelectors) {
+        try {
+          if (el.matches(selector)) {
+            return true;
           }
+        } catch {
+          // Ignore selector incompatibilities in unusual embedded contexts.
+        }
+      }
+      return false;
+    };
+
+    const walkTree = (root: Node): void => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+      let current = walker.nextNode();
+
+      while (current && checkedCount < 200 && !shadowFound) {
+        const el = current as Element;
+        checkedCount++;
+
+        if (matchesCaptcha(el)) {
+          shadowFound = true;
+          break;
         }
 
         if (el.shadowRoot) {
-          traverseShadow(el.shadowRoot);
+          walkTree(el.shadowRoot);
         }
+
+        current = walker.nextNode();
       }
     };
-    
-    // Only traverse elements that actually have shadow roots
-    const topLevel = document.querySelectorAll("*");
-    for (let i = 0; i < topLevel.length; i++) {
-      if (shadowFound || checkedCount > 200) break;
-      const sr = topLevel[i].shadowRoot;
-      if (sr) {
-        traverseShadow(sr);
-      }
-    }
+
+    walkTree(document.body || document.documentElement);
     return shadowFound;
   }
 
@@ -180,7 +185,11 @@ export class ResponseDetectionEngine {
   /**
    * Injects a floating Glassmorphic UI alerting user to solve CAPTCHA.
    */
-  static injectCaptchaOverlay(onResume: () => void, onTimeout: () => void): void {
+  static injectCaptchaOverlay(
+    onResume: () => void,
+    onTimeout: () => void,
+    initialRemainingTime = CAPTCHA_SOLVE_TIMEOUT
+  ): void {
     if (this.activeOverlay || this.captchaResolutionPending) {
       return; // Already waiting for user
     }
@@ -223,7 +232,7 @@ export class ResponseDetectionEngine {
       this.activeStyleEl.remove();
     }
     const styleEl = document.createElement("style");
-    styleEl.innerHTML = `
+    styleEl.textContent = `
       @keyframes fpSlideIn {
         from { transform: translateY(-20px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
@@ -320,7 +329,7 @@ export class ResponseDetectionEngine {
     
     this.countdownIntervalId = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, CAPTCHA_SOLVE_TIMEOUT - elapsed);
+      const remaining = Math.max(0, initialRemainingTime - elapsed);
       const minutes = Math.floor(remaining / 60000);
       const seconds = Math.floor((remaining % 60000) / 1000);
       
@@ -334,10 +343,6 @@ export class ResponseDetectionEngine {
         wrappedOnTimeout();
       }
     }, 1000);
-
-    // Countdown interval handles both the UI timer and the timeout — no separate
-    // hard timeout needed (BUG-006: removed duplicate captchaTimeoutId that was
-    // causing onTimeout to fire twice simultaneously)
   }
 
   /**
@@ -398,17 +403,28 @@ export class ResponseDetectionEngine {
 
     // Pause state and trigger notification loop
     const state = await StateManager.getState();
+    let remainingTime = CAPTCHA_SOLVE_TIMEOUT;
+    let captchaStartTime = Date.now();
+
     if (state) {
+      if (state.captchaPending && state.captchaStartTime) {
+        // Resume/reload case: keep original start time
+        captchaStartTime = state.captchaStartTime;
+        const elapsed = Date.now() - captchaStartTime;
+        remainingTime = Math.max(0, CAPTCHA_SOLVE_TIMEOUT - elapsed);
+      }
+
       await StateManager.updateState({
         status: ExecutionStatus.CAPTCHA_PAUSED,
-        captchaPending: true
+        captchaPending: true,
+        captchaStartTime
       });
 
       // Send message to Service Worker for dynamic notification/badge updates
       chrome.runtime.sendMessage({
         type: MessageType.CAPTCHA_DETECTED,
         sessionId,
-        payload: {},
+        payload: { timeLeft: Math.floor(remainingTime / 1000) },
         tabId: state.tabContext,
         timestamp: Date.now()
       });
@@ -446,7 +462,8 @@ export class ResponseDetectionEngine {
           }
           this.activeCaptchaResolver = null;
           resolve("TIMEOUT");
-        }
+        },
+        remainingTime
       );
     });
   }

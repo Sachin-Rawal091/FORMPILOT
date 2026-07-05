@@ -81,6 +81,8 @@ export interface ExecutionState {
   pageRetryCount: number;
   mutexLock: string | null;
   captchaPending: boolean;
+  captchaStartTime?: number;
+  captchaTimeLeft?: number;
   tabContext: number;
   lastStepResult: string;
   recordingId?: string;
@@ -197,6 +199,9 @@ export enum MessageType {
   SET_EXECUTION_STATE,
   GET_EXECUTION_STATE,
   CLEAR_BADGE,
+  GET_FILE_BLOB,
+  ADD_SESSION_META,
+  GET_SESSION_METAS,
 }
 
 export interface RecordingState {
@@ -219,7 +224,7 @@ export interface UserSettings {
 export interface SessionMeta {
   sessionId: string;
   timestamp: number;
-  // Additional meta fields if needed
+  recordingId: string;
 }
 
 export interface FileBlob {

@@ -58,7 +58,8 @@
       if (idleTimer !== null) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         if (activeRequests === 0) {
-          window.postMessage({ type: "FORMPILOT_NETWORK_IDLE", timestamp: Date.now() }, "*");
+          const targetOrigin = window.location.origin === "null" ? "*" : window.location.origin;
+          window.postMessage({ type: "FORMPILOT_NETWORK_IDLE", timestamp: Date.now() }, targetOrigin);
         }
         idleTimer = null;
       }, IDLE_DEBOUNCE_MS);

@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'FormPilotDB';
-const DB_VERSION = 3; // Upgraded to 3 to add indexes to 'logs' store and oldVersion migrations
+const DB_VERSION = 5; // v5 ensures the sessionTimestamp index is created for everyone
 
 export async function getDB(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
@@ -17,6 +17,7 @@ export async function getDB(): Promise<IDBPDatabase> {
           const logsStore = db.createObjectStore('logs', { keyPath: 'id' });
           logsStore.createIndex('sessionId', 'sessionId');
           logsStore.createIndex('timestamp', 'timestamp');
+          logsStore.createIndex('sessionTimestamp', ['sessionId', 'timestamp']);
         }
         if (!db.objectStoreNames.contains('sessions')) {
           db.createObjectStore('sessions', { keyPath: 'sessionId' });
@@ -36,6 +37,12 @@ export async function getDB(): Promise<IDBPDatabase> {
           if (!logsStore.indexNames.contains('timestamp')) {
             logsStore.createIndex('timestamp', 'timestamp');
           }
+        }
+      }
+      if (oldVersion < 5 && db.objectStoreNames.contains('logs')) {
+        const logsStore = transaction.objectStore('logs');
+        if (!logsStore.indexNames.contains('sessionTimestamp')) {
+          logsStore.createIndex('sessionTimestamp', ['sessionId', 'timestamp']);
         }
       }
     },

@@ -37,84 +37,96 @@ export class Executor {
   
   constructor() {
     this.setupMessageListener();
+    this.setupStorageListener();
     this.checkAutoResume();
+    (globalThis as any).__FP_EXECUTOR_INSTANCE__ = this;
   }
 
   private async checkAutoResume() {
-    // Wait a bit to ensure state is settled from any background syncs
-    await new Promise(r => setTimeout(r, 500));
-    
-    // Guard: Do not resume if execution has already been actively triggered via messages
-    if (this.isRunning) {
-      logger.debug('Executor', 'checkAutoResume: Execution already running, skipping auto-resume.');
-      return;
-    }
-    
+    this.autoResumeInProgress = true;
     try {
-      const state = await StateManager.getState();
-      if (state && state.status === ExecutionStatus.RUNNING && state.recordingId && state.sessionId) {
-        // BUG-034: Early hostname guard — only proceed if we're on the right domain
-        const expectedHost = state.siteUrl ? new URL(state.siteUrl).hostname : null;
-        if (expectedHost && !window.location.hostname.includes(expectedHost)) {
-          logger.debug('Executor', `Auto-resume skipped: wrong domain. Expected: ${expectedHost}, Current: ${window.location.hostname}`);
-          return;
-        }
-
-        // BUG-001: Only auto-resume if URL already matches — do NOT redirect.
-        // Redirecting causes infinite navigation loops when the target page
-        // immediately injects a new content script that auto-resumes again.
-        if (state.currentUrl) {
-          try {
-            const currentUrlObj = new URL(window.location.href);
-            const stateUrlObj = new URL(state.currentUrl);
-            
-            if (currentUrlObj.hostname !== stateUrlObj.hostname || currentUrlObj.pathname !== stateUrlObj.pathname) {
-              // If we are at the start of a new row (step 0), we can still resume if we are on the siteUrl
-              let canResume = false;
-              if (state.currentStepIndex === 0 && state.siteUrl) {
-                try {
-                  const siteUrlObj = new URL(state.siteUrl);
-                  if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
-                    canResume = true;
-                  }
-                } catch(e) {}
-              }
-              
-              if (!canResume) {
-                logger.debug('Executor', `Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
-                return;
-              }
-            }
-          } catch(e) {}
-        }
-        
-        logger.info('Executor', 'Auto-resuming from previous state...');
-        
-        // Load custom settings overrides from local storage
-        try {
-          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            const localData = await chrome.storage.local.get('settings');
-            const settings = (localData.settings || {}) as UserSettings;
-            this.stepDelay = settings.stepDelay ?? STEP_DELAY;
-            RetryEngine.customSettings = {
-              waitElementTimeout: settings.waitElementTimeout,
-              maxStepRetries: settings.maxStepRetries
-            };
-            logger.info('Executor', 'Custom settings loaded for auto-resume:', {
-              stepDelay: this.stepDelay,
-              waitElementTimeout: RetryEngine.customSettings.waitElementTimeout,
-              maxStepRetries: RetryEngine.customSettings.maxStepRetries
-            });
-          }
-        } catch (err) {
-          logger.error('Executor', 'Failed to load custom settings in auto-resume:', err);
-        }
-
-        this.autoResumeInProgress = true; // BUG-011: block concurrent START_EXECUTION
-        // Re-hydrate and start (will pick up from state.currentRowIndex)
-        await this.start(state.recordingId, state.sessionId);
+      // Wait a bit to ensure state is settled from any background syncs
+      await new Promise(r => setTimeout(r, 500));
+      
+      // Guard: Do not resume if execution has already been actively triggered via messages
+      if (this.isRunning) {
+        logger.debug('Executor', 'checkAutoResume: Execution already running, skipping auto-resume.');
         this.autoResumeInProgress = false;
+        return;
       }
+      
+      try {
+        const state = await StateManager.getState();
+        if (state && state.status === ExecutionStatus.RUNNING && state.recordingId && state.sessionId) {
+          // BUG-034: Early hostname guard — only proceed if we're on the right domain
+          const expectedHost = state.siteUrl ? new URL(state.siteUrl).hostname : null;
+          if (expectedHost && !window.location.hostname.includes(expectedHost)) {
+            logger.debug('Executor', `Auto-resume skipped: wrong domain. Expected: ${expectedHost}, Current: ${window.location.hostname}`);
+            this.autoResumeInProgress = false;
+            return;
+          }
+  
+          // BUG-001: Only auto-resume if URL already matches — do NOT redirect.
+          // Redirecting causes infinite navigation loops when the target page
+          // immediately injects a new content script that auto-resumes again.
+          if (state.currentUrl) {
+            try {
+              const currentUrlObj = new URL(window.location.href);
+              const stateUrlObj = new URL(state.currentUrl);
+              
+              if (currentUrlObj.hostname !== stateUrlObj.hostname || currentUrlObj.pathname !== stateUrlObj.pathname) {
+                // If we are at the start of a new row (step 0), we can still resume if we are on the siteUrl
+                let canResume = false;
+                if (state.currentStepIndex === 0 && state.siteUrl) {
+                  try {
+                    const siteUrlObj = new URL(state.siteUrl);
+                    if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
+                      canResume = true;
+                    }
+                  } catch(e) {}
+                }
+                
+                if (!canResume) {
+                  logger.debug('Executor', `Auto-resume skipped. Expected URL: ${stateUrlObj.pathname}, Current: ${currentUrlObj.pathname}`);
+                  this.autoResumeInProgress = false;
+                  return;
+                }
+              }
+            } catch(e) {
+              this.autoResumeInProgress = false;
+              return;
+            }
+          }
+          
+          logger.info('Executor', 'Auto-resuming from previous state...');
+          
+          // Load custom settings overrides from local storage
+          try {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+              const localData = await chrome.storage.local.get('settings');
+              const settings = (localData.settings || {}) as UserSettings;
+              this.stepDelay = settings.stepDelay ?? STEP_DELAY;
+              RetryEngine.customSettings = {
+                waitElementTimeout: settings.waitElementTimeout,
+                maxStepRetries: settings.maxStepRetries
+              };
+              logger.info('Executor', 'Custom settings loaded for auto-resume:', {
+                stepDelay: this.stepDelay,
+                waitElementTimeout: RetryEngine.customSettings.waitElementTimeout,
+                maxStepRetries: RetryEngine.customSettings.maxStepRetries
+              });
+            }
+          } catch (err) {
+            logger.error('Executor', 'Failed to load custom settings in auto-resume:', err);
+          }
+  
+          // Re-hydrate and start (will pick up from state.currentRowIndex)
+          await this.start(state.recordingId, state.sessionId);
+        }
+      } catch (err) {
+        logger.error('Executor', 'Inner checkAutoResume error:', err);
+      }
+      this.autoResumeInProgress = false;
     } catch (err) {
       this.autoResumeInProgress = false;
       logger.error('Executor', 'Failed auto-resume check', err);
@@ -138,7 +150,19 @@ export class Executor {
           this.pause();
           break;
         case MessageType.RESUME_EXECUTION:
-          this.resume();
+          if (!this.isRunning) {
+            StateManager.getState().then((state) => {
+              if (state && state.recordingId && state.sessionId) {
+                this.start(state.recordingId, state.sessionId);
+              } else {
+                this.resume();
+              }
+            }).catch(() => {
+              this.resume();
+            });
+          } else {
+            this.resume();
+          }
           break;
         case MessageType.ABORT_EXECUTION:
           this.abort();
@@ -147,6 +171,29 @@ export class Executor {
       sendResponse({ received: true });
       return true;
     });
+  }
+
+  private setupStorageListener() {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'session' && changes.executionState) {
+          const newState = changes.executionState.newValue as ExecutionState | undefined;
+          if (newState) {
+            if (newState.status === ExecutionStatus.PAUSED) {
+              if (!this.isPaused) {
+                logger.info('Executor', 'Detected pause state from storage.');
+                this.isPaused = true;
+              }
+            } else if (newState.status === ExecutionStatus.RUNNING) {
+              if (this.isPaused) {
+                logger.info('Executor', 'Detected resume state from storage.');
+                this.isPaused = false;
+              }
+            }
+          }
+        }
+      });
+    }
   }
 
   private safeSendMessage(message: any, timeoutMs = 2000): Promise<any> {
@@ -189,8 +236,13 @@ export class Executor {
 
   async start(recordingId: string, sessionId: string, tabId: number = -1) {
     if (this.isRunning) {
-      logger.warn('Executor', "Executor is already running.");
-      return;
+      if (this.sessionId && this.sessionId !== sessionId) {
+        logger.warn('Executor', `Forcing restart: New session ${sessionId} requested while session ${this.sessionId} was active.`);
+        this.cleanup();
+      } else {
+        logger.warn('Executor', "Executor is already running.");
+        return;
+      }
     }
 
     // Load custom settings overrides from storage
@@ -251,10 +303,14 @@ export class Executor {
 
       // 3. Mutex check and state initialization
       let state;
-      const isResume = currentState && currentState.sessionId === sessionId && currentState.status === ExecutionStatus.RUNNING;
+      const isResume = currentState && currentState.sessionId === sessionId && (
+        currentState.status === ExecutionStatus.RUNNING ||
+        currentState.status === ExecutionStatus.PAUSED ||
+        currentState.status === ExecutionStatus.CAPTCHA_PAUSED
+      );
       
       if (isResume) {
-        state = currentState;
+        state = await StateManager.updateState({ status: ExecutionStatus.RUNNING }) || currentState;
         logger.debug('Executor', 'Re-using existing active session state for auto-resume:', state);
       } else {
         state = await StateManager.initializeSession(
@@ -265,6 +321,45 @@ export class Executor {
           tabId
         );
         logger.info('Executor', 'Session initialized with state:', state);
+      }
+
+      // If we are starting from the very beginning (row 0, step 0), ensure we have a clean start URL page
+      const resetDoneKey = `__fp_reset_done_${this.sessionId}`;
+      if (
+        state && 
+        state.currentRowIndex === 0 && 
+        state.currentStepIndex === 0 && 
+        this.siteUrl && 
+        sessionStorage.getItem(resetDoneKey) !== 'true'
+      ) {
+        let urlsMatch = false;
+        try {
+          const currentUrlObj = new URL(window.location.href);
+          const siteUrlObj = new URL(this.siteUrl);
+          if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
+            urlsMatch = true;
+          }
+        } catch(e) {}
+
+        if (!urlsMatch) {
+          logger.info('Executor', `Fresh start detected. Ensuring clean start URL: ${this.siteUrl}`);
+          sessionStorage.setItem(resetDoneKey, 'true');
+
+          const updatedState = await StateManager.updateState({ currentUrl: this.siteUrl });
+          if (updatedState) {
+            await this.safeSendMessage({
+              type: MessageType.SET_EXECUTION_STATE,
+              payload: { state: updatedState },
+              sessionId: this.sessionId,
+              timestamp: Date.now()
+            }, 5000);
+          }
+          window.location.href = this.siteUrl;
+          return; // Execution resumes on new page load via checkAutoResume
+        } else {
+          logger.info('Executor', 'Already at start URL. Skipping page reload to preserve state.');
+          sessionStorage.setItem(resetDoneKey, 'true');
+        }
       }
 
       // Send initial state update (status is RUNNING)
@@ -320,7 +415,15 @@ export class Executor {
         currentChunkOffset = neededChunkOffset;
       }
 
-      const row = excelRows[rowIdx - currentChunkOffset];
+      const chunkIndex = rowIdx - currentChunkOffset;
+      if (chunkIndex < 0 || chunkIndex >= excelRows.length) {
+        logger.warn('Executor', `Excel chunk misaligned for row ${rowIdx}; reloading aligned chunk.`);
+        currentChunkOffset = -1;
+        rowIdx--;
+        continue;
+      }
+
+      const row = excelRows[chunkIndex];
       if (!row) {
         throw new Error(`Row ${rowIdx} not found in loaded chunk.`);
       }
@@ -353,6 +456,8 @@ export class Executor {
       const rowResult = await this.executeRow(row, state);
 
       if (rowResult === "ABORTED") return;
+
+      state = (await StateManager.getState()) || state;
 
       // Update counters based on result
       const updates: Partial<ExecutionState> = {
@@ -394,13 +499,15 @@ export class Executor {
         logger.debug('Executor', `Resetting form for row ${rowIdx + 2}...`);
         await this.resetFormBetweenRows();
         // After reset, wait for DOM to fully stabilize before starting next row
-        await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
+        await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch((err) => {
+          logger.debug('Executor', `Post-reset DOM stability wait timed out: ${err.message}`);
+        });
       }
     }
 
     // Mark completion
     if (this.isRunning) {
-      await this.completeExecution(state);
+      await this.completeExecution();
     }
   }
 
@@ -420,7 +527,9 @@ export class Executor {
     if (dismissed) {
       // Wait for form to reset after dismissal and DOM to stabilize
       await new Promise(r => setTimeout(r, 1500));
-      await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
+      await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch((err) => {
+        logger.debug('Executor', `Post-reset DOM stability wait timed out: ${err.message}`);
+      });
       
       // Check if the first form element is now available — retry up to 3 times with increasing waits
       const firstStep = this.recordingSteps[0];
@@ -515,7 +624,17 @@ export class Executor {
       for (const btn of buttons) {
         const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
         const isVisible = (btn as HTMLElement).offsetParent !== null;
-        if (isVisible && dismissKeywords.some(kw => text.includes(kw))) {
+        
+        // Prevent partial word matches on short keywords (e.g. 'ok' matching 'book now')
+        const matchesKeyword = dismissKeywords.some(kw => {
+          if (kw.length <= 4) {
+            const regex = new RegExp(`\\b${kw}\\b`, 'i');
+            return regex.test(text);
+          }
+          return text.includes(kw);
+        });
+
+        if (isVisible && matchesKeyword) {
           logger.debug('Executor', `Clicking dismiss button in modal: "${(btn as HTMLElement).textContent?.trim()}"`);
           (btn as HTMLElement).click();
           await new Promise(r => setTimeout(r, 500));
@@ -537,11 +656,11 @@ export class Executor {
           return true;
         }
       }
-    }
 
-    // Strategy 3: Try pressing Escape key to close modals
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await new Promise(r => setTimeout(r, 300));
+      // Strategy 3: Try pressing Escape key to close modals
+      modalContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise(r => setTimeout(r, 300));
+    }
 
     // Check if any modal/overlay was dismissed
     const overlays = document.querySelectorAll('.modal.show, .modal-backdrop, [class*="overlay"][class*="active"]');
@@ -562,6 +681,7 @@ export class Executor {
 
     while (stepIndex < this.recordingSteps.length) {
       if (!this.isRunning) return "ABORTED";
+      state = (await StateManager.getState()) || state;
 
       // Handle pause state
       if (this.isPaused) {
@@ -603,7 +723,9 @@ export class Executor {
             
             if (isNavigationClick || prevStep.action === Action.NAVIGATE_NEXT) {
               logger.debug('Executor', `Post-navigation DOM stability wait after step: ${prevStep.id}`);
-              await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch(() => {});
+              await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch((err) => {
+                logger.debug('Executor', `Post-navigation stability wait timed out: ${err.message}`);
+              });
             }
           }
         }
@@ -620,6 +742,8 @@ export class Executor {
       const startTime = Date.now();
       const res = await RetryEngine.executeStepWithRetry(step, row.data);
       const duration = Date.now() - startTime;
+
+      if (!this.isRunning) return "ABORTED";
 
       if (res.success) {
         // Step completed successfully (or optionally skipped)
@@ -735,7 +859,9 @@ export class Executor {
             return "FAILED";
           } else {
             // Within retry limit: wait for DOM to stabilize and retry this same step
-            await SmartWaitEngine.waitForDOMStability(5000).catch(() => {});
+            await SmartWaitEngine.waitForDOMStability(5000).catch((err) => {
+              logger.debug('Executor', `Retry DOM stability wait timed out: ${err.message}`);
+            });
           }
         }
       }
@@ -747,7 +873,9 @@ export class Executor {
 
     // 4. Use DOM stability detection instead of fixed delay to detect submission result
     // BUG-025: SmartWaitEngine.waitForDOMStability is more reliable than a fixed POST_SUBMIT_SETTLE_MS
-    await SmartWaitEngine.waitForDOMStability(POST_SUBMIT_SETTLE_MS).catch(() => {});
+    await SmartWaitEngine.waitForDOMStability(POST_SUBMIT_SETTLE_MS).catch((err) => {
+      logger.debug('Executor', `Post-submit DOM stability wait timed out: ${err.message}`);
+    });
 
     // 5. Run final submission detection checks on page
     const finalOutcome = await ResponseDetectionEngine.runSubmissionDetection(
@@ -795,7 +923,7 @@ export class Executor {
   /**
    * Marks the execution session as complete, releases the mutex, and cleans up.
    */
-  private async completeExecution(_state: ExecutionState) {
+  private async completeExecution() {
     const finalState = await StateManager.updateState({
       status: ExecutionStatus.COMPLETE,
       mutexLock: null // Release Mutex
@@ -814,12 +942,16 @@ export class Executor {
 
   // ─── EXECUTION CONTROLS ────────────────────────────────────────────
 
-  pause() {
+  async pause() {
     this.isPaused = true;
     logger.info('Executor', 'Paused.');
+    const state = await StateManager.updateState({ status: ExecutionStatus.PAUSED });
+    if (state) {
+      this.broadcastStateUpdate(state);
+    }
   }
 
-  resume() {
+  async resume() {
     this.isPaused = false;
     // Broadcast message to Service Worker so badge clears immediately on resume
     chrome.runtime.sendMessage({
@@ -827,12 +959,19 @@ export class Executor {
       sessionId: this.sessionId,
       payload: {},
       timestamp: Date.now()
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.warn('Executor', 'CLEAR_BADGE message failed:', err);
+    });
     
     // Resolve any pending CAPTCHA promise
     ResponseDetectionEngine.forceResolveCaptcha();
     
     logger.info('Executor', 'Resumed.');
+
+    const state = await StateManager.updateState({ status: ExecutionStatus.RUNNING });
+    if (state) {
+      this.broadcastStateUpdate(state);
+    }
   }
 
   async abort() {
@@ -876,7 +1015,9 @@ export class Executor {
         sessionId: this.sessionId,
         payload: { state: failedState },
         timestamp: Date.now()
-      }).catch(() => {});
+      }).catch((err) => {
+        logger.warn('Executor', 'Failed to notify service worker about fatal execution completion:', err);
+      });
     }
     
     await StateManager.clearSession();
@@ -965,5 +1106,8 @@ export class Executor {
   }
 }
 
-// Instantiate and bind to content script context
-new Executor();
+// Instantiate and bind to content script context with singleton guard
+if (typeof window !== 'undefined' && !(globalThis as any).__FP_EXECUTOR_INIT__) {
+  (globalThis as any).__FP_EXECUTOR_INIT__ = true;
+  new Executor();
+}

@@ -1,10 +1,24 @@
 import { FormPilotMessage } from "../types";
+import { logger } from "../utils/logger";
 
 /**
  * Sends a message to the background service worker.
  */
-export async function sendToBackground<T>(msg: FormPilotMessage<T>): Promise<FormPilotMessage> {
-  return chrome.runtime.sendMessage(msg);
+export function sendToBackground<T>(msg: FormPilotMessage<T>): Promise<FormPilotMessage | null> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(msg, (response) => {
+      if (chrome.runtime.lastError) {
+        const rawMessage = chrome.runtime.lastError.message || 'Unknown runtime messaging error';
+        const errorMessage = rawMessage.toLowerCase();
+        if (!errorMessage.includes('receiving end does not exist') && !errorMessage.includes('no listener')) {
+          logger.warn('Messages', `sendToBackground failed for type ${msg.type}: ${rawMessage}`);
+        }
+        resolve(null);
+        return;
+      }
+      resolve(response ?? null);
+    });
+  });
 }
 
 /**

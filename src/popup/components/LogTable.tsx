@@ -54,8 +54,8 @@ export const LogTable: React.FC<LogTableProps> = ({ logs, maxHeight = 'h-[280px]
             {/* Log Header */}
             <div className="flex justify-between items-center text-[10px]">
               <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-slate-400 font-mono">Row {log.rowIndex}</span>
-                <span className="text-slate-600 font-bold">•</span>
+                <span className="font-semibold text-slate-400 font-mono">Row {Math.max(1, log.rowIndex - 1)}</span>
+                <span className="text-slate-600 font-semibold">•</span>
                 <span className="text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
               </div>
               <span className={`px-2 py-0.5 rounded-md border font-semibold text-[9px] ${getStatusStyle(log.status)}`}>
@@ -67,7 +67,7 @@ export const LogTable: React.FC<LogTableProps> = ({ logs, maxHeight = 'h-[280px]
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-0.5 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-mono text-[9px] font-bold">
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-mono text-[9px] font-semibold">
                     {getActionName(log.action)}
                   </span>
                   {log.value && (

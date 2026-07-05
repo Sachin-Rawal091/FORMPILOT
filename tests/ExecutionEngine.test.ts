@@ -114,6 +114,13 @@ describe('ExecutionEngine.resolveAndValidateValue', () => {
     expect(result.status).toBe('FILLED');
     expect(result.value).toBe('direct-value');
   });
+
+  it('sanitizes control characters without HTML-encoding legitimate form values', () => {
+    const step = makeStep({ columnName: 'Company' });
+    const result = ExecutionEngine.resolveAndValidateValue(step, { Company: 'AT&T <Acme>\u0000' });
+    expect(result.status).toBe('FILLED');
+    expect(result.value).toBe('AT&T <Acme>');
+  });
 });
 
 // ─────────────────────────────────────────────
@@ -294,14 +301,21 @@ describe('ExecutionEngine.executeAction', () => {
     expect(spy).toHaveBeenCalledWith(btn, ['mousedown', 'mouseup', 'click']);
   });
 
-  it('RICH_TEXT — calls execCommand on contenteditable', async () => {
+  it('RICH_TEXT - replaces contenteditable text without deprecated execCommand', async () => {
     const div = document.createElement('div');
     div.contentEditable = 'true';
     document.body.appendChild(div);
-    document.execCommand = vi.fn().mockReturnValue(true);
-    const execSpy = document.execCommand;
+    const execSpy = vi.fn().mockReturnValue(true);
+    document.execCommand = execSpy;
+    const events: string[] = [];
+    ['beforeinput', 'input', 'change', 'blur'].forEach((eventName) => {
+      div.addEventListener(eventName, () => events.push(eventName));
+    });
+
     await ExecutionEngine.executeAction(makeStep({ action: Action.RICH_TEXT }), makeSelectorResult(div), 'Hello World');
-    expect(execSpy).toHaveBeenCalledWith('selectAll');
-    expect(execSpy).toHaveBeenCalledWith('insertText', false, 'Hello World');
+
+    expect(div.textContent).toBe('Hello World');
+    expect(execSpy).not.toHaveBeenCalled();
+    expect(events).toEqual(['beforeinput', 'input', 'change', 'blur']);
   });
 });

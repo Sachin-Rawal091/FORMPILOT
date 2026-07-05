@@ -34,7 +34,7 @@ export const DOUBLE_CLICK_WINDOW_MS = 200;
 
 // Selector
 export const SHADOW_TRAVERSAL_LIMIT = 500;
-export const MIN_SELECTOR_CONFIDENCE = 0.6;
+export const MIN_SELECTOR_CONFIDENCE = 0.4;
 
 // Excel
 export const EXCEL_HEADER_SCAN_ROWS = 5;
@@ -46,13 +46,10 @@ export const EXCEL_CHUNK_SIZE = 50;
 export const LOG_RETENTION_DAYS = 30;
 export const STORAGE_QUOTA_WARNING = 0.8;
 
-// Network idle XHR blocklist
-export const NETWORK_IDLE_BLOCKLIST = [
-  "google-analytics.com",
-  "analytics.google.com",
-  "mixpanel.com",
-  "hotjar.com",
-  "facebook.com/tr",
-  "doubleclick.net",
-  "googletagmanager.com",
-];
+// Date Picker Adapters (click-based custom calendar widgets, e.g. react-multi-date-picker)
+export const DATEPICKER_CALENDAR_OPEN_TIMEOUT = 3000;
+export const DATEPICKER_VIEW_SWITCH_TIMEOUT = 2500;
+export const DATEPICKER_NAV_STEP_TIMEOUT = 2000;
+export const DATEPICKER_NAV_MAX_ITERATIONS = 60;
+export const DATEPICKER_VALUE_SETTLE_TIMEOUT = 2000;
+

@@ -1,4 +1,4 @@
-import { Step, Action, SelectorMeta, FormPilotMessage, MessageType } from "../types";
+import { Step, Action, SelectorMeta, FormPilotMessage, MessageType, ExecutionState, ExecutionStatus } from "../types";
 import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS } from "../shared/constants";
 import { logger } from "../utils/logger";
 
@@ -8,12 +8,14 @@ class RecordingEngine {
   private currentStepIndex = 0;
   private lastClickTime = 0;
   private lastClickedElement: HTMLElement | null = null;
-  private debounceTimers: Map<HTMLElement, ReturnType<typeof setTimeout>> = new Map();
+  private debounceTimers: WeakMap<HTMLElement, ReturnType<typeof setTimeout>> = new WeakMap();
+  private activeTimers: Set<ReturnType<typeof setTimeout>> = new Set();
 
   constructor() {
     this.setupMessageListener();
     this.setupDOMEventListeners();
     this.restoreRecordingState();
+    (globalThis as any).__FP_RECORDER_INSTANCE__ = this;
   }
 
   private setupMessageListener() {
@@ -26,31 +28,33 @@ class RecordingEngine {
           logger.info('Recorder', `Recording started for session ID: ${message.sessionId}, recordingId: ${this.recordingId}`);
           break;
         case MessageType.STOP_RECORDING:
+        case MessageType.START_EXECUTION:
           this.isRecording = false;
-          // BUG-033: Clear all pending debounce timers to prevent steps being recorded after stop
-          this.debounceTimers.forEach(timer => clearTimeout(timer));
-          this.debounceTimers.clear();
-          logger.info('Recorder', 'Recording stopped.');
+          // Clear all pending debounce timers to prevent steps being recorded after stop
+          this.activeTimers.forEach(timer => clearTimeout(timer));
+          this.activeTimers.clear();
+          logger.info('Recorder', `Recording stopped/prevented due to message type: ${MessageType[message.type]}`);
           break;
       }
     });
   }
 
   private restoreRecordingState() {
-    // BUG-039: Gate on lightweight session storage check before waking the service worker
+    // Gate on lightweight local storage check before waking the service worker
     try {
-      chrome.storage.session.get('recordingState', (result) => {
+      if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+      chrome.storage.local.get('isRecordingActive', (result) => {
         if (chrome.runtime.lastError) {
-          logger.warn('Recorder', 'Session storage check failed:', chrome.runtime.lastError.message);
+          logger.warn('Recorder', 'Local storage check failed:', chrome.runtime.lastError.message);
           return;
         }
         // Only send GET_STATUS if there's evidence of an active recording
-        if (!result || !result.recordingState) {
-          logger.debug('Recorder', 'No recording state in session storage, skipping GET_STATUS.');
+        if (!result || !result.isRecordingActive) {
+          logger.debug('Recorder', 'No recording active in local storage, skipping GET_STATUS.');
           return;
         }
 
-        logger.debug('Recorder', 'Recording state found in session storage, sending GET_STATUS...');
+        logger.debug('Recorder', 'Recording state found in local storage, sending GET_STATUS...');
         chrome.runtime.sendMessage({
           type: MessageType.GET_STATUS,
           sessionId: "",
@@ -105,7 +109,9 @@ class RecordingEngine {
       sessionId: this.recordingId,
       payload: { url: window.location.href },
       timestamp: Date.now()
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.warn('Recorder', 'PAGE_NAVIGATED message failed:', err);
+    });
   }
 
   private handleClickEvent(e: MouseEvent) {
@@ -116,11 +122,22 @@ class RecordingEngine {
 
     logger.debug('Recorder', `Click event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} type=${el.getAttribute('type') || 'none'}`);
 
-    // BUG-024: Filter out ALL input types handled by change/input events to prevent double capturing
     const tagName = el.tagName.toLowerCase();
 
     if (tagName === "input" || tagName === "select" || tagName === "textarea") {
       return; // All input-like elements are handled by change or input events
+    }
+
+    // Exclude buttons/elements that trigger form submission so we don't capture both click and submit
+    const button = el.closest("button");
+    if (button) {
+      const type = button.getAttribute("type") || "submit";
+      if (type === "submit") {
+        const form = button.form || button.closest("form");
+        if (form) {
+          return; // Skip click, let submit event handler capture this action
+        }
+      }
     }
 
     // Deduplication of double-clicks
@@ -131,11 +148,42 @@ class RecordingEngine {
     this.lastClickTime = now;
     this.lastClickedElement = el;
 
-    // BUG-018: Cross-origin iframe detection removed — content scripts can't be injected
-    // cross-origin, making the previous check unreachable in practice.
+    // Capture values of all inputs on the page before they are programmatically modified by page scripts
+    const inputsBeforeClick = new Map<HTMLInputElement | HTMLTextAreaElement, string>();
+    document.querySelectorAll("input, textarea").forEach((input) => {
+      if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+        inputsBeforeClick.set(input, input.value);
+      }
+    });
 
-    // Capture as CLICK
-    this.addRecordedStep(Action.CLICK, el);
+    // Wait 100ms for page scripts to process the click and programmatically update any input values
+    setTimeout(() => {
+      let programmaticChangeDetected = false;
+
+      inputsBeforeClick.forEach((oldValue, inputEl) => {
+        if (!document.body.contains(inputEl)) return;
+        const newValue = inputEl.value;
+        if (newValue !== oldValue) {
+          programmaticChangeDetected = true;
+          logger.info('Recorder', `Detected programmatic value change on <${inputEl.tagName.toLowerCase()}> after click: "${oldValue}" -> "${newValue}"`);
+          
+          const isDateInput = 
+            inputEl.type === 'date' || 
+            inputEl.classList.contains('datepicker') || 
+            inputEl.classList.contains('rmdp-input') || 
+            inputEl.classList.contains('flatpickr-input') ||
+            /date|calendar|picker|dob|birth|expiry/i.test(inputEl.name || inputEl.id || inputEl.className || '');
+          
+          const action = isDateInput ? Action.DATEPICKER : Action.FILL;
+          this.addRecordedStep(action, inputEl, newValue);
+        }
+      });
+
+      // If no input was changed programmatically, record the click as a normal static click
+      if (!programmaticChangeDetected) {
+        this.addRecordedStep(Action.CLICK, el);
+      }
+    }, 100);
   }
 
   private handleInputEvent(e: Event) {
@@ -159,6 +207,7 @@ class RecordingEngine {
       const existingTimer = this.debounceTimers.get(el);
       if (existingTimer) {
         clearTimeout(existingTimer);
+        this.activeTimers.delete(existingTimer);
       }
 
       const timer = setTimeout(() => {
@@ -167,9 +216,11 @@ class RecordingEngine {
         
         this.addRecordedStep(isRichText ? Action.RICH_TEXT : Action.FILL, el, value);
         this.debounceTimers.delete(el);
+        this.activeTimers.delete(timer);
       }, INPUT_DEBOUNCE_MS);
 
       this.debounceTimers.set(el, timer);
+      this.activeTimers.add(timer);
     }
   }
 
@@ -241,9 +292,39 @@ class RecordingEngine {
       checked,
       required: (el as any).required === true || el.hasAttribute('required'),
       retryable: true,
-      maxRetries: 3
+      maxRetries: 3,
+      expectedType: action === Action.DATEPICKER ? "date" : undefined
     };
 
+    // Mutually exclude recording events if an automation run is currently active
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      chrome.storage.session.get('executionState', (result) => {
+        if (chrome.runtime.lastError) {
+          logger.warn('Recorder', 'Session storage check failed:', chrome.runtime.lastError.message);
+          this.sendRecordingEvent(newStep, currentUrl);
+          return;
+        }
+        const execState = result?.executionState as ExecutionState | undefined;
+        if (execState) {
+          const status = execState.status;
+          // Ignore event if status is RUNNING (1), PAUSED (2), or CAPTCHA_PAUSED (3)
+          if (
+            status === ExecutionStatus.RUNNING ||
+            status === ExecutionStatus.PAUSED ||
+            status === ExecutionStatus.CAPTCHA_PAUSED
+          ) {
+            logger.warn('Recorder', 'Ignored recording step because execution is active.', { status });
+            return;
+          }
+        }
+        this.sendRecordingEvent(newStep, currentUrl);
+      });
+    } else {
+      this.sendRecordingEvent(newStep, currentUrl);
+    }
+  }
+
+  private sendRecordingEvent(newStep: Step, currentUrl: string) {
     logger.debug('Recorder', 'Recorded Step:', newStep);
 
     // Send the recorded step to service worker which persists it and forwards to popup
@@ -353,8 +434,26 @@ class RecordingEngine {
 
     const paths: string[] = [];
     let current: HTMLElement | null = el;
+    let depth = 0;
+    let anchor: string | null = null;
 
-    while (current && current.nodeType === Node.ELEMENT_NODE) {
+    while (current && current.nodeType === Node.ELEMENT_NODE && depth < 5) {
+      // If we find an ancestor with an ID, anchor to it
+      if (current !== el && current.id) {
+        anchor = `//*[@id="${current.id}"]`;
+        break;
+      }
+
+      const tagName = current.nodeName.toLowerCase();
+      if (current !== el && (tagName === "form" || tagName === "fieldset")) {
+        if (current.id) {
+          anchor = `//${tagName}[@id="${current.id}"]`;
+        } else {
+          anchor = `//${tagName}`;
+        }
+        break;
+      }
+
       let index = 0;
       let sibling = current.previousSibling;
       while (sibling) {
@@ -364,9 +463,8 @@ class RecordingEngine {
         sibling = sibling.previousSibling;
       }
 
-      const tagName = current.nodeName.toLowerCase();
       const currNodeName = current.nodeName;
-      // BUG-013: Always include [1] if there are any siblings of the same type,
+      // Always include [1] if there are any siblings of the same type,
       // even if this element is the first child — prevents ambiguous XPaths
       const hasSameTypeSiblings = current.parentElement
         ? Array.from(current.parentElement.children)
@@ -374,16 +472,34 @@ class RecordingEngine {
         : false;
       const pathIndex = (index > 0 || hasSameTypeSiblings) ? `[${index + 1}]` : "";
       paths.unshift(`${tagName}${pathIndex}`);
+      
       current = current.parentElement;
+      depth++;
     }
 
-    return paths.length ? `/${paths.join("/")}` : "";
+    if (anchor) {
+      return `${anchor}/${paths.join("/")}`;
+    }
+
+    return paths.length ? `//${paths.join("/")}` : "";
   }
 
   private generateUUID(): string {
-    return crypto.randomUUID();
+    // BUG-040: Use crypto.randomUUID() for cryptographically strong UUIDs
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for environments without crypto.randomUUID
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
   }
 }
 
-// Instantiate the recorder
-new RecordingEngine();
+// Instantiate the recorder with singleton guard
+if (typeof window !== 'undefined' && !(globalThis as any).__FP_RECORDER_INIT__) {
+  (globalThis as any).__FP_RECORDER_INIT__ = true;
+  new RecordingEngine();
+}

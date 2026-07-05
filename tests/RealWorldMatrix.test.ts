@@ -115,7 +115,8 @@ describe('Real-World Matrix Test Suite', () => {
     vi.spyOn(StorageManager, 'setExcelData').mockResolvedValue(undefined);
     vi.spyOn(StorageManager, 'addLogEntry').mockResolvedValue(undefined);
 
-    const executor = new Executor();
+    const executor = (globalThis as any).__FP_EXECUTOR_INSTANCE__ || new Executor();
+    sessionStorage.setItem('__fp_reset_done_session-matrix', 'true');
     executor.start(recording.id, 'session-matrix');
   }
 
