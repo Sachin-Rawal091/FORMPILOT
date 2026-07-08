@@ -125,6 +125,56 @@ describe('RetryEngine', () => {
     expect(result.retriesUsed).toBe(0); // Optional step skipped on first attempt, 0 retries used
   });
 
+  it('should skip optional non-control fields when they are disabled', async () => {
+    const step: Step = {
+      id: 's6-disabled-field',
+      action: Action.FILL,
+      selector: '#optional-field',
+      selectorMeta: {},
+      pageId: 'p1',
+      required: false,
+    };
+
+    const input = document.createElement('input');
+    input.disabled = true;
+    const mockResult: SelectorResult = { element: input, strategy: SelectorStrategy.ID, confidence: 1.0, shadow: false };
+
+    vi.spyOn(SmartWaitEngine, 'waitForElementVisible').mockResolvedValue(mockResult);
+    const executeSpy = vi.spyOn(ExecutionEngine, 'executeAction').mockResolvedValue(undefined);
+
+    const result = await RetryEngine.executeStepWithRetry(step, {});
+    expect(result.success).toBe(true);
+    expect(result.resolvedStatus).toBe('STEP_SKIPPED');
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it('should retry recorded button controls even when marked not required by form metadata', async () => {
+    // CLICK actions bypass the isElementInteractable check (only value-filling
+    // actions like FILL/SELECT/DATEPICKER check for disabled state). So a
+    // disabled button is clicked directly on the first attempt.
+    const step: Step = {
+      id: 's6-final-button',
+      action: Action.CLICK,
+      selector: '#final-submit',
+      selectorMeta: {},
+      pageId: 'p1',
+      required: false,
+      maxRetries: 1,
+    };
+
+    const button = document.createElement('button');
+    button.disabled = true;
+    const mockResult: SelectorResult = { element: button, strategy: SelectorStrategy.ID, confidence: 1.0, shadow: false };
+
+    vi.spyOn(SmartWaitEngine, 'waitForElementVisible').mockResolvedValue(mockResult);
+    const executeSpy = vi.spyOn(ExecutionEngine, 'executeAction').mockResolvedValue(undefined);
+
+    const result = await RetryEngine.executeStepWithRetry(step, {});
+    expect(result.success).toBe(true);
+    expect(result.retriesUsed).toBe(0);
+    expect(executeSpy).toHaveBeenCalledWith(step, mockResult, null);
+  });
+
   it('should return FATAL on fatal network errors or destroyed contexts', async () => {
     const step: Step = {
       id: 's7',

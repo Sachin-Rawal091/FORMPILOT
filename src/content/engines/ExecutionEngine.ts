@@ -5,6 +5,8 @@ import { WAIT_DOM_STABLE_TIMEOUT, WAIT_URL_CHANGE_TIMEOUT } from "../../shared/c
 import { StorageManager } from "../../storage/StorageManager";
 import { logger } from "../../utils/logger";
 import { sanitizeTextValue } from "../../utils/sanitize";
+import { DatePickerEngine } from "../datepickers/DatePickerEngine";
+import { DatePickerRegistry } from "../datepickers/DatePickerRegistry";
 
 export interface ResolvedValueResult {
   value: string | null;
@@ -89,7 +91,8 @@ export class ExecutionEngine {
         
         // 2. Parse from date string or Date object
         if (!parsedDate) {
-          parsedDate = rawValue instanceof Date ? rawValue : parseDateString(stringValue);
+          const formatSample = step.defaultValue || step.value || '';
+          parsedDate = rawValue instanceof Date ? rawValue : parseDateString(stringValue, formatSample);
         }
 
         if (parsedDate && !isNaN(parsedDate.getTime())) {
@@ -131,9 +134,9 @@ export class ExecutionEngine {
             /date|calendar/i.test(el.name || el.id || el.className || '');
 
           if (isDateInput && val) {
-            const dateObj = parseDateString(val);
+            const detectedFormat = detectElementDateFormat(el);
+            const dateObj = parseDateString(val, detectedFormat);
             if (dateObj && !isNaN(dateObj.getTime())) {
-              const detectedFormat = detectElementDateFormat(el);
               if (detectedFormat) {
                 val = formatDate(dateObj, detectedFormat);
               }
@@ -368,33 +371,54 @@ export class ExecutionEngine {
         break;
 
       case Action.DATEPICKER:
-        // Custom date picker interaction — click to open, then try to set value
-        logger.warn('ExecutionEngine', `DATEPICKER action: Custom date pickers may not accept programmatic value setting. Step: ${step.id}`);
-        dispatchEvents(el, ["mousedown", "mouseup", "click"]);
+        logger.info('ExecutionEngine', `Handling Action.DATEPICKER for step ${step.id}`);
         if (resolvedValue) {
-          let val = resolvedValue;
-          const dateObj = parseDateString(val);
-          if (dateObj && !isNaN(dateObj.getTime())) {
-            const detectedFormat = detectElementDateFormat(el);
-            if (detectedFormat) {
-              val = formatDate(dateObj, detectedFormat);
+          try {
+            const adapterMatched = !!DatePickerRegistry.detect(el);
+            const filled = await DatePickerEngine.fill(el, resolvedValue);
+            if (!filled) {
+              if (!adapterMatched) {
+                logger.warn('ExecutionEngine', `DatePickerEngine could not match any adapter for step ${step.id}. Falling back to native/direct interaction.`);
+              } else {
+                logger.warn('ExecutionEngine', `DatePickerEngine matched adapter but fill or verification failed for step ${step.id}. Falling back to native/direct interaction.`);
+              }
+              await this.fallbackDatePickerFill(el, resolvedValue);
             }
+          } catch (error) {
+            logger.error('ExecutionEngine', `DatePickerEngine failed during execution for step ${step.id}. Failing step.`, error);
+            throw error;
           }
-          // Try setting on the input directly (works for native date inputs)
-          if (el instanceof HTMLInputElement) {
-            setInputValue(el, val);
-          }
-          // Also try setting on any hidden input within the same container
-          // (common pattern in custom date picker libraries)
-          const container = el.closest('.datepicker, .date-picker, .flatpickr-wrapper, [class*="date"]');
-          if (container) {
-            const hiddenInput = container.querySelector('input[type="hidden"], input.flatpickr-input') as HTMLInputElement | null;
-            if (hiddenInput && hiddenInput !== el) {
-              setInputValue(hiddenInput, val);
-            }
-          }
+        } else {
+          logger.warn('ExecutionEngine', `No resolved value provided for DATEPICKER action on step ${step.id}`);
         }
         break;
+    }
+  }
+
+  /**
+   * Naive fallback strategy for DatePicker execution.
+   */
+  static async fallbackDatePickerFill(el: HTMLElement, resolvedValue: string): Promise<void> {
+    dispatchEvents(el, ["mousedown", "mouseup", "click"]);
+    let val = resolvedValue;
+    const dateObj = parseDateString(val);
+    if (dateObj && !isNaN(dateObj.getTime())) {
+      const detectedFormat = detectElementDateFormat(el);
+      if (detectedFormat) {
+        val = formatDate(dateObj, detectedFormat);
+      }
+    }
+    // Try setting on the input directly (works for native date inputs)
+    if (el instanceof HTMLInputElement) {
+      setInputValue(el, val);
+    }
+    // Also try setting on any hidden input within the same container
+    const container = el.closest('.datepicker, .date-picker, .flatpickr-wrapper, [class*="date"]');
+    if (container) {
+      const hiddenInput = container.querySelector('input[type="hidden"], input.flatpickr-input') as HTMLInputElement | null;
+      if (hiddenInput && hiddenInput !== el) {
+        setInputValue(hiddenInput, val);
+      }
     }
   }
 }
@@ -411,9 +435,40 @@ function parseExcelSerialDate(serial: number): Date | null {
 }
 
 /**
+ * Checks if a format string suggests Day-first (DD/MM) rather than Month-first (MM/DD).
+ */
+function isDDMMFormat(formatStr: string): boolean {
+  const clean = formatStr.toLowerCase().trim();
+  const separator = clean.includes('/') ? '/' : clean.includes('-') ? '-' : clean.includes('.') ? '.' : '';
+  if (!separator) return true; // default fallback
+
+  const parts = clean.split(separator);
+  if (parts.length !== 3) return true; // default fallback
+
+  // If first part is explicitly 'd' or a number > 12, it is DD/MM/YYYY
+  if (parts[0].includes('d') || Number(parts[0]) > 12) {
+    return true;
+  }
+  // If second part is 'd' or a number > 12, it is MM/DD/YYYY
+  if (parts[1].includes('d') || Number(parts[1]) > 12) {
+    return false;
+  }
+  // If first part is 'm', it is MM/DD/YYYY
+  if (parts[0].includes('m')) {
+    return false;
+  }
+  // If second part is 'm', it is DD/MM/YYYY
+  if (parts[1].includes('m')) {
+    return true;
+  }
+
+  return true; // default fallback
+}
+
+/**
  * Parses date strings in various common formats (e.g. DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD).
  */
-function parseDateString(str: string): Date | null {
+function parseDateString(str: string, formatPreference?: string | null): Date | null {
   if (!str) return null;
   
   // Try standard native parsing for ISO strings (containing 'T') or YYYY-MM-DD strings
@@ -464,8 +519,14 @@ function parseDateString(str: string): Date | null {
     if (val2 > 12) {
       return new Date(Date.UTC(val3, val1 - 1, val2));
     }
-    // Default fallback to MM/DD/YYYY (standard JS behavior) or DD/MM/YYYY
-    return new Date(Date.UTC(val3, val1 - 1, val2));
+    
+    // Both parts <= 12, use formatPreference if available
+    const isDDMM = formatPreference ? isDDMMFormat(formatPreference) : true;
+    if (isDDMM) {
+      return new Date(Date.UTC(val3, val2 - 1, val1)); // Day is val1, Month is val2
+    } else {
+      return new Date(Date.UTC(val3, val1 - 1, val2)); // Day is val2, Month is val1
+    }
   }
   
   const parsed = new Date(cleanStr);

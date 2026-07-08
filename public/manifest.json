@@ -10,7 +10,6 @@
     "page": "public/popup.html",
     "open_in_tab": true
   },
-  "//": "Tailwind CSS requires 'unsafe-inline' for style injection; SheetJS/xlsx parsing requires 'wasm-unsafe-eval' for Excel operations.",
   "content_security_policy": {
     "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'"
   },

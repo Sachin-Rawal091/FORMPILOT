@@ -1,4 +1,4 @@
-import { Step } from "../../types";
+import { Action, Step } from "../../types";
 import { ExecutionEngine } from "./ExecutionEngine";
 import { SmartWaitEngine } from "./SmartWaitEngine";
 import { WAIT_ELEMENT_TIMEOUT, MAX_STEP_RETRIES, RETRY_BACKOFF_BASE, RETRY_BACKOFF_MAX } from "../../shared/constants";
@@ -80,6 +80,15 @@ export class RetryEngine {
 
         if (!selectorResult) {
           throw new Error("Element not found or not visible after timeout.");
+        }
+
+        // Check if the element is interactable (only for value-filling actions).
+        // Click/Submit/Navigate actions bypass this check — matching old FormPilot behavior
+        // where buttons were clicked directly without disabled-state validation.
+        const el = selectorResult.element as HTMLElement;
+        const isValueAction = [Action.FILL, Action.SELECT, Action.DATEPICKER, Action.SELECT_RADIO, Action.TOGGLE_CHECKBOX].includes(step.action);
+        if (isValueAction && !RetryEngine.isElementInteractable(el)) {
+          throw new Error("Element is disabled or non-interactable in the current page state.");
         }
 
         // 3. Execute Action
@@ -188,9 +197,20 @@ export class RetryEngine {
       return ErrorClassification.FATAL;
     }
 
+    const isOptionalNonControlStep = step.required === false && !this.isControlAction(step);
+
     // Element not found/visible
     if (msg.includes("element not found") || msg.includes("timeout")) {
-      if (step.required === false) {
+      if (isOptionalNonControlStep) {
+        return ErrorClassification.SKIPPABLE;
+      }
+      return ErrorClassification.RETRYABLE;
+    }
+
+    // Optional fields may be skipped when disabled by upstream form choices, but
+    // flow-control buttons must retry so confirmation/final-submit clicks are not lost.
+    if (msg.includes("disabled") || msg.includes("non-interactable")) {
+      if (isOptionalNonControlStep) {
         return ErrorClassification.SKIPPABLE;
       }
       return ErrorClassification.RETRYABLE;
@@ -198,5 +218,35 @@ export class RetryEngine {
 
     // Default to retryable for unknown temporary errors (e.g., node detached from DOM)
     return ErrorClassification.RETRYABLE;
+  }
+
+  private static isControlAction(step: Step): boolean {
+    return step.action === Action.CLICK ||
+      step.action === Action.SUBMIT ||
+      step.action === Action.NAVIGATE_NEXT;
+  }
+
+  private static isElementInteractable(el: HTMLElement): boolean {
+    let current: HTMLElement | null = el;
+    while (current && current !== document.body) {
+      const style = window.getComputedStyle(current);
+      if (style.pointerEvents === "none") {
+        return false;
+      }
+      
+      const isDisabled = 
+        current.hasAttribute("disabled") ||
+        current.getAttribute("aria-disabled") === "true" ||
+        current.classList.contains("disabled") ||
+        current.classList.contains("disabled_date_picker") ||
+        (current === el && /disabled/i.test(current.className || ""));
+        
+      if (isDisabled) {
+        return false;
+      }
+      
+      current = current.parentElement;
+    }
+    return true;
   }
 }

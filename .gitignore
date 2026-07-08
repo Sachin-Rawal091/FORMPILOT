@@ -39,6 +39,7 @@ agent_handoff.md
 job_portal.html
 krp_portal.html
 student_portal.html
+rmdp_sandbox.html
 server.js
 test-extension.js
 run_live_demo.js
@@ -50,6 +51,7 @@ verify_job_flow_live.js
 verify_same_tab_automation.js
 generate_job_excel.js
 generate_krp_excel.js
+generate_rmdp_excel.js
 generate_student_excel.js
 
 # ─── Issue & Bug Logs ────────────────────────────────────────────────────────
@@ -114,9 +116,12 @@ $RECYCLE.BIN/
 *.env.json
 
 # ─── Local Test / Utility Scripts ──────────────────────────────────────────────
+package_zip.js
 print_execution_logs.js
 record_and_print_steps.js
 verify_job_automation_live.js
+verify_rmdp_automation_live.js
+verify_student_automation_live.js
 
 # ─── Excel / Spreadsheet Files ─────────────────────────────────────────────────
 *.xlsx

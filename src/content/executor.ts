@@ -549,8 +549,18 @@ export class Executor {
               style.visibility !== "hidden" &&
               (isBypass || (rect.width > 0 && rect.height > 0))
             ) {
-              logger.debug('Executor', `Form reset successful (attempt ${attempt + 1}), ready for next row.`);
-              return;
+              // Verify no success overlay/modal is still active and blocking the screen
+              const overlays = document.querySelectorAll(
+                '.modal.show, .modal-backdrop, [class*="overlay"][class*="active"], #receipt-overlay.receipt-active'
+              );
+              const visibleOverlays = Array.from(overlays).filter(o => this.isElementVisible(o as HTMLElement));
+              
+              if (visibleOverlays.length > 0) {
+                logger.debug('Executor', `Form element found, but success overlay/modal is still visible. Waiting...`);
+              } else {
+                logger.debug('Executor', `Form reset successful (attempt ${attempt + 1}), ready for next row.`);
+                return;
+              }
             }
           }
           // Wait progressively longer between checks (500ms, 1000ms, 1500ms)
@@ -588,6 +598,19 @@ export class Executor {
     }
   }
 
+  private isElementVisible(el: HTMLElement): boolean {
+    const style = window.getComputedStyle(el);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    ) {
+      return false;
+    }
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
   /**
    * Attempts to dismiss success modals, overlays, toasts, and alerts by
    * finding and clicking common dismiss/close/ok/complete buttons.
@@ -601,14 +624,14 @@ export class Executor {
       '.modal.show', '.modal.active', '.modal[style*="display: block"]',
       '.modal-backdrop + .modal', '[role="dialog"]', '.overlay.active',
       '.toast.show', '.alert.show', '.alert-success',
-      '#receipt-overlay', '[class*="overlay"][class*="active"]',
+      '#receipt-overlay', '#receipt-overlay.receipt-active', '[class*="overlay"][class*="active"]',
       '.success-modal', '.confirmation-modal'
     ];
 
     let modalContainer: Element | null = null;
     for (const selector of modalContainerSelectors) {
       const el = document.querySelector(selector);
-      if (el && (el as HTMLElement).offsetParent !== null) {
+      if (el && this.isElementVisible(el as HTMLElement)) {
         modalContainer = el;
         break;
       }
@@ -623,7 +646,7 @@ export class Executor {
       
       for (const btn of buttons) {
         const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
-        const isVisible = (btn as HTMLElement).offsetParent !== null;
+        const isVisible = this.isElementVisible(btn as HTMLElement);
         
         // Prevent partial word matches on short keywords (e.g. 'ok' matching 'book now')
         const matchesKeyword = dismissKeywords.some(kw => {
@@ -649,7 +672,7 @@ export class Executor {
       ];
       for (const selector of closeSelectors) {
         const el = modalContainer.querySelector(selector);
-        if (el && (el as HTMLElement).offsetParent !== null) {
+        if (el && this.isElementVisible(el as HTMLElement)) {
           logger.debug('Executor', `Clicking close selector in modal: ${selector}`);
           (el as HTMLElement).click();
           await new Promise(r => setTimeout(r, 500));
@@ -663,8 +686,11 @@ export class Executor {
     }
 
     // Check if any modal/overlay was dismissed
-    const overlays = document.querySelectorAll('.modal.show, .modal-backdrop, [class*="overlay"][class*="active"]');
-    if (overlays.length === 0) {
+    const overlays = document.querySelectorAll(
+      '.modal.show, .modal-backdrop, [class*="overlay"][class*="active"], #receipt-overlay.receipt-active'
+    );
+    const visibleOverlays = Array.from(overlays).filter(el => this.isElementVisible(el as HTMLElement));
+    if (visibleOverlays.length === 0) {
       return true; // No visible overlays, consider it dismissed
     }
 

@@ -10,6 +10,7 @@ class RecordingEngine {
   private lastClickedElement: HTMLElement | null = null;
   private debounceTimers: WeakMap<HTMLElement, ReturnType<typeof setTimeout>> = new WeakMap();
   private activeTimers: Set<ReturnType<typeof setTimeout>> = new Set();
+  private lastButtonSubmitTime = 0;
 
   constructor() {
     this.setupMessageListener();
@@ -124,29 +125,33 @@ class RecordingEngine {
 
     const tagName = el.tagName.toLowerCase();
 
+    // Ignore normal value inputs but allow submit buttons/inputs to be clicked and recorded
     if (tagName === "input" || tagName === "select" || tagName === "textarea") {
-      return; // All input-like elements are handled by change or input events
+      const typeAttr = el.getAttribute("type")?.toLowerCase() || "";
+      if (typeAttr !== "submit" && typeAttr !== "button" && typeAttr !== "image") {
+        return;
+      }
     }
 
-    // Exclude buttons/elements that trigger form submission so we don't capture both click and submit
     const button = el.closest("button");
-    if (button) {
-      const type = button.getAttribute("type") || "submit";
-      if (type === "submit") {
-        const form = button.form || button.closest("form");
-        if (form) {
-          return; // Skip click, let submit event handler capture this action
-        }
-      }
+    const targetElement = button || el;
+
+    // Track submit button clicks to deduplicate subsequent form submit events
+    const isSubmitButton = 
+      (button && (button.getAttribute("type") || "submit") === "submit") ||
+      (tagName === "input" && el.getAttribute("type") === "submit");
+
+    if (isSubmitButton) {
+      this.lastButtonSubmitTime = Date.now();
     }
 
     // Deduplication of double-clicks
     const now = Date.now();
-    if (now - this.lastClickTime < DOUBLE_CLICK_WINDOW_MS && this.lastClickedElement === el) {
+    if (now - this.lastClickTime < DOUBLE_CLICK_WINDOW_MS && this.lastClickedElement === targetElement) {
       return;
     }
     this.lastClickTime = now;
-    this.lastClickedElement = el;
+    this.lastClickedElement = targetElement;
 
     // Capture values of all inputs on the page before they are programmatically modified by page scripts
     const inputsBeforeClick = new Map<HTMLInputElement | HTMLTextAreaElement, string>();
@@ -164,6 +169,11 @@ class RecordingEngine {
         if (!document.body.contains(inputEl)) return;
         const newValue = inputEl.value;
         if (newValue !== oldValue) {
+          // If the new value is empty, it's likely a form reset/clear, ignore it
+          if (newValue === "" && oldValue !== "") {
+            return;
+          }
+
           programmaticChangeDetected = true;
           logger.info('Recorder', `Detected programmatic value change on <${inputEl.tagName.toLowerCase()}> after click: "${oldValue}" -> "${newValue}"`);
           
@@ -179,11 +189,39 @@ class RecordingEngine {
         }
       });
 
-      // If no input was changed programmatically, record the click as a normal static click
-      if (!programmaticChangeDetected) {
-        this.addRecordedStep(Action.CLICK, el);
+      // Always record clicks on buttons/links (unless they are inside a date picker wrapper)
+      const isControlClick = this.isButtonOrLink(targetElement) && !this.isInsideDatePicker(targetElement);
+
+      // If no input was changed programmatically, or it is a control click, record the click
+      if (!programmaticChangeDetected || isControlClick) {
+        this.addRecordedStep(Action.CLICK, targetElement);
       }
     }, 100);
+  }
+
+  private isButtonOrLink(el: HTMLElement): boolean {
+    const tagName = el.tagName.toLowerCase();
+    if (tagName === "button" || tagName === "a") return true;
+    if (el.closest("button") || el.closest("a")) return true;
+    if (el.getAttribute("role") === "button") return true;
+    
+    // Check classes
+    const classList = Array.from(el.classList);
+    if (classList.some(c => /btn|button/i.test(c))) return true;
+    
+    return false;
+  }
+
+  private isInsideDatePicker(el: HTMLElement): boolean {
+    let current: HTMLElement | null = el;
+    while (current && current !== document.body) {
+      const idOrClass = (current.id || "") + " " + (current.className || "");
+      if (/datepicker|calendar|rmdp|flatpickr|ui-datepicker/i.test(idOrClass)) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
   }
 
   private handleInputEvent(e: Event) {
@@ -269,6 +307,12 @@ class RecordingEngine {
 
     const formEl = e.target as HTMLFormElement;
     if (!formEl) return;
+
+    // Deduplicate submit events triggered by an already recorded button/input click
+    if (Date.now() - this.lastButtonSubmitTime < 200) {
+      logger.info('Recorder', 'Ignored SUBMIT event because it was already recorded as a button click.');
+      return;
+    }
 
     this.addRecordedStep(Action.SUBMIT, formEl);
   }
