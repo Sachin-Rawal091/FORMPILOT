@@ -1,9 +1,16 @@
-# ─── Dependencies ─────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# FormPilot - Professional GitIgnore Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+# --- Package Manager & Dependencies ---
 node_modules/
 jspm_packages/
 web_modules/
+.npm/
+.yarn/
+.pnpm-store/
 
-# ─── Production Build Outputs ─────────────────────────────────────────────────
+# --- Build Outputs & Production Packages ---
 dist/
 dist-ssr/
 build/
@@ -11,31 +18,83 @@ out/
 bin/
 obj/
 *.zip
+*.tar.gz
+*.tgz
 
-# ─── Screenshots & Media Artifacts ────────────────────────────────────────────
-live_demo_screenshots/
-screenshots/
-media/
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.mp4
+# --- Local Environment & Security Secrets ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env.json
+*.pem
+*.key
+*.cert
 
-# ─── Agent Caches & Workspace Diagnostics ────────────────────────────────────
+# --- IDE / Editor Configurations ---
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+.eslintcache
+
+# --- Test, Diagnostic & Coverage Reports ---
+coverage/
+*.lcov
+.nyc_output
+.nyc-output/
+.nyc_metadata/
+tests/debug/
+
+# --- TypeScript & Build Caches ---
+*.tsbuildinfo
+.vite-cache/
+.parcel-cache/
+.rollup.cache/
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+vitest.config.ts.timestamp-*
+vitest.config.js.timestamp-*
+
+# --- OS & System Metadata ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Agent Caches & Workspace Diagnostics ---
 .antigravity/
 .gemini/
 scratch/
 .tempmediaStorage/
 agent_temp/
-*.log
-AGENTS.md
-agent_plan.md
-agent_progess.md
-agent_log.md
-agent_handoff.md
+issue.md
 
-# ─── Local Portals, Servers & Test/Demo Scripts ──────────────────────────────
+# --- Local Sandbox & Test Scripts ---
+# Mock portals and local servers used only for offline sandbox testing
+debug_dates.cjs
 job_portal.html
 krp_portal.html
 student_portal.html
@@ -53,69 +112,6 @@ generate_job_excel.js
 generate_krp_excel.js
 generate_rmdp_excel.js
 generate_student_excel.js
-
-# ─── Issue & Bug Logs ────────────────────────────────────────────────────────
-issue.md
-tests/debug/
-
-# ─── Logs ─────────────────────────────────────────────────────────────────────
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# ─── Diagnostic / Coverage Reports ────────────────────────────────────────────
-coverage/
-*.lcov
-.nyc_output
-.nyc-output/
-.nyc_metadata/
-
-# ─── IDE / Editor Configs ─────────────────────────────────────────────────────
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.project
-.classpath
-.settings/
-*.sublime-project
-*.sublime-workspace
-.eslintcache
-
-# ─── TypeScript & Build Caches ────────────────────────────────────────────────
-*.tsbuildinfo
-.vite-cache/
-.parcel-cache/
-.rollup.cache/
-
-# ─── Vite & Vitest Temporaries ───────────────────────────────────────────────
-vite.config.ts.timestamp-*
-vite.config.js.timestamp-*
-vitest.config.ts.timestamp-*
-vitest.config.js.timestamp-*
-
-# ─── OS Metadata ──────────────────────────────────────────────────────────────
-.DS_Store
-Thumbs.db
-desktop.ini
-$RECYCLE.BIN/
-
-# ─── Local Environment & Secrets ─────────────────────────────────────────────
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.env.json
-
-# ─── Local Test / Utility Scripts ──────────────────────────────────────────────
 package_zip.js
 print_execution_logs.js
 record_and_print_steps.js
@@ -123,10 +119,27 @@ verify_job_automation_live.js
 verify_rmdp_automation_live.js
 verify_student_automation_live.js
 
-# ─── Excel / Spreadsheet Files ─────────────────────────────────────────────────
+# --- Agent Protocol Files ---
+# Ignored to prevent agent state churn in project git history
+AGENTS.md
+agent_plan.md
+agent_progess.md
+agent_log.md
+agent_handoff.md
+
+# --- Excel / Temporary Spreadsheet Files ---
 *.xlsx
 *.xls
 *.csv
 ~$*
 
-
+# --- Screenshots & Media Artifacts ---
+live_demo_screenshots/
+screenshots/
+media/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.webp

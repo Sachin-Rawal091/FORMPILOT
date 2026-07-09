@@ -1,5 +1,5 @@
 import { MessageType, ExecutionStatus } from "../../types";
-import { CAPTCHA_SOLVE_TIMEOUT } from "../../shared/constants";
+import { CAPTCHA_SOLVE_TIMEOUT, SHADOW_TRAVERSAL_LIMIT } from "../../shared/constants";
 import { StateManager } from "./StateManager";
 
 export class ResponseDetectionEngine {
@@ -56,7 +56,7 @@ export class ResponseDetectionEngine {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
       let current = walker.nextNode();
 
-      while (current && checkedCount < 200 && !shadowFound) {
+      while (current && checkedCount < SHADOW_TRAVERSAL_LIMIT && !shadowFound) {
         const el = current as Element;
         checkedCount++;
 

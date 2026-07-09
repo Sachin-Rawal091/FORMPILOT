@@ -31,7 +31,7 @@ function shouldLog(level: LogLevel): boolean {
 export const logger = {
   debug: (context: string, message: string, ...data: unknown[]) => {
     if (shouldLog('DEBUG')) {
-      console.log(`${LOG_PREFIX}[${context}]`, message, ...data);
+      console.debug(`${LOG_PREFIX}[${context}]`, message, ...data);
     }
   },
 

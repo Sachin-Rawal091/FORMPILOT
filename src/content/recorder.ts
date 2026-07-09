@@ -161,19 +161,22 @@ class RecordingEngine {
       }
     });
 
-    // Wait 100ms for page scripts to process the click and programmatically update any input values
-    setTimeout(() => {
-      let programmaticChangeDetected = false;
+    let programmaticChangeDetected = false;
+    const recordedInputs = new Set<HTMLInputElement | HTMLTextAreaElement>();
 
+    const checkChanges = () => {
+      let changeFound = false;
       inputsBeforeClick.forEach((oldValue, inputEl) => {
         if (!document.body.contains(inputEl)) return;
         const newValue = inputEl.value;
-        if (newValue !== oldValue) {
+        if (newValue !== oldValue && !recordedInputs.has(inputEl)) {
           // If the new value is empty, it's likely a form reset/clear, ignore it
           if (newValue === "" && oldValue !== "") {
             return;
           }
 
+          recordedInputs.add(inputEl);
+          changeFound = true;
           programmaticChangeDetected = true;
           logger.info('Recorder', `Detected programmatic value change on <${inputEl.tagName.toLowerCase()}> after click: "${oldValue}" -> "${newValue}"`);
           
@@ -188,15 +191,34 @@ class RecordingEngine {
           this.addRecordedStep(action, inputEl, newValue);
         }
       });
+      return changeFound;
+    };
 
-      // Always record clicks on buttons/links (unless they are inside a date picker wrapper)
-      const isControlClick = this.isButtonOrLink(targetElement) && !this.isInsideDatePicker(targetElement);
+    // Run programmatic change checks at intervals to handle varying framework speeds: 50ms, 150ms, 300ms, 500ms
+    const intervals = [50, 150, 300, 500];
+    intervals.forEach((delay, idx) => {
+      const timer = setTimeout(() => {
+        checkChanges();
+        this.activeTimers.delete(timer);
 
-      // If no input was changed programmatically, or it is a control click, record the click
-      if (!programmaticChangeDetected || isControlClick) {
-        this.addRecordedStep(Action.CLICK, targetElement);
-      }
-    }, 100);
+        // On the final check interval, if no programmatic changes occurred, record the click if appropriate
+        if (idx === intervals.length - 1) {
+          const isControlClick = this.isButtonOrLink(targetElement) && !this.isInsideDatePicker(targetElement);
+
+          // BUG-042: Clicks inside a date picker (or on a calendar backdrop/overlay/popup wrapper)
+          // should NEVER be recorded as separate CLICK steps, because the DATEPICKER action
+          // handles the entire click -> navigate -> select -> close sequence internally.
+          // Recording these clicks causes automation to stall on empty/closed calendar elements.
+          if (!this.isInsideDatePicker(targetElement)) {
+            // If no input was changed programmatically, or it is a control click, record the click
+            if (!programmaticChangeDetected || isControlClick) {
+              this.addRecordedStep(Action.CLICK, targetElement);
+            }
+          }
+        }
+      }, delay);
+      this.activeTimers.add(timer);
+    });
   }
 
   private isButtonOrLink(el: HTMLElement): boolean {
@@ -216,7 +238,7 @@ class RecordingEngine {
     let current: HTMLElement | null = el;
     while (current && current !== document.body) {
       const idOrClass = (current.id || "") + " " + (current.className || "");
-      if (/datepicker|calendar|rmdp|flatpickr|ui-datepicker/i.test(idOrClass)) {
+      if (/datepicker|calendar|rmdp|flatpickr|ui-datepicker|backdrop|overlay/i.test(idOrClass)) {
         return true;
       }
       current = current.parentElement;

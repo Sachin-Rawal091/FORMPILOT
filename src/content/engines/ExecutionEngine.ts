@@ -143,8 +143,17 @@ export class ExecutionEngine {
             }
           }
           setInputValue(el, val);
+          // BUG-101: Readback verification
+          if (val && !el.value) {
+            throw new Error(`Input field remained empty after fill attempt.`);
+          }
         } else if (el instanceof HTMLTextAreaElement) {
-          setTextareaValue(el, resolvedValue || "");
+          const val = resolvedValue || "";
+          setTextareaValue(el, val);
+          // BUG-101: Readback verification
+          if (val && !el.value) {
+            throw new Error(`Textarea remained empty after fill attempt.`);
+          }
         }
         break;
 
@@ -172,6 +181,10 @@ export class ExecutionEngine {
           await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch((err) => {
             logger.debug('ExecutionEngine', `SELECT DOM stability wait timed out: ${err.message}`);
           });
+          // BUG-101: Readback verification
+          if (resolvedValue && !el.value) {
+            throw new Error(`Select element remained unselected after fill attempt.`);
+          }
         }
         break;
 
@@ -204,6 +217,12 @@ export class ExecutionEngine {
           });
           if (targetRadio) {
             setCheckboxValue(targetRadio, true);
+            // BUG-101: Readback verification
+            if (!targetRadio.checked) {
+              throw new Error(`Radio button failed to check.`);
+            }
+          } else {
+            throw new Error(`Radio button matching value or label "${resolvedValue}" not found.`);
           }
         }
         break;
@@ -286,6 +305,10 @@ export class ExecutionEngine {
 
             if (checkboxInput.checked !== desiredState) {
               setCheckboxValue(checkboxInput, desiredState);
+              // BUG-101: Readback verification
+              if (checkboxInput.checked !== desiredState) {
+                throw new Error(`Checkbox failed to toggle to ${desiredState}.`);
+              }
             }
           } else {
             // Fallback for custom checkboxes: click to toggle
@@ -331,11 +354,16 @@ export class ExecutionEngine {
               dataTransfer.items.add(file);
               el.files = dataTransfer.files;
               dispatchEvents(el, ["change", "input"]);
+              // BUG-101: Readback verification
+              if (!el.files || el.files.length === 0) {
+                throw new Error(`File input remained empty after upload attempt.`);
+              }
             } else {
               logger.warn('ExecutionEngine', `File blob not found for alias: ${resolvedValue}`);
             }
           } catch (e) {
             logger.error('ExecutionEngine', `Failed to inject file blob for ${resolvedValue}`, e);
+            throw e;
           }
         }
         break;
@@ -363,6 +391,10 @@ export class ExecutionEngine {
           el.textContent = resolvedValue || '';
         }
         dispatchEvents(el, ["input", "change", "blur"]);
+        // BUG-101: Readback verification
+        if ((resolvedValue || '').trim() && !el.textContent?.trim()) {
+          throw new Error(`Rich text container remained empty after input attempt.`);
+        }
         break;
 
       case Action.MANUAL_IFRAME:
@@ -373,20 +405,28 @@ export class ExecutionEngine {
       case Action.DATEPICKER:
         logger.info('ExecutionEngine', `Handling Action.DATEPICKER for step ${step.id}`);
         if (resolvedValue) {
-          try {
-            const adapterMatched = !!DatePickerRegistry.detect(el);
-            const filled = await DatePickerEngine.fill(el, resolvedValue);
-            if (!filled) {
-              if (!adapterMatched) {
-                logger.warn('ExecutionEngine', `DatePickerEngine could not match any adapter for step ${step.id}. Falling back to native/direct interaction.`);
-              } else {
-                logger.warn('ExecutionEngine', `DatePickerEngine matched adapter but fill or verification failed for step ${step.id}. Falling back to native/direct interaction.`);
-              }
-              await this.fallbackDatePickerFill(el, resolvedValue);
+          const adapterMatched = !!DatePickerRegistry.detect(el);
+          const filled = await DatePickerEngine.fill(el, resolvedValue);
+          if (!filled) {
+            if (adapterMatched) {
+              // A dedicated adapter (e.g. RmdpAdapter) recognized this element's
+              // class but failed to complete the open/navigate/select/verify
+              // sequence. These are React/JS-controlled widgets that never read
+              // the raw DOM .value (see RmdpAdapter's class docstring) — the
+              // naive fallback below is a guaranteed silent no-op for them.
+              // Throw so RetryEngine retries and, if it still can't succeed,
+              // honestly reports FAILED instead of a false FILLED/FILLED_COERCED
+              // status (the resolvedStatus logged by RetryEngine reflects value
+              // parsing, not DOM outcome, so a swallowed failure here silently
+              // becomes a fabricated "success" in the Activity Log).
+              throw new Error(`DatePicker adapter matched but could not complete the fill sequence for step ${step.id}. See prior WARN logs for the exact stage that failed.`);
             }
-          } catch (error) {
-            logger.error('ExecutionEngine', `DatePickerEngine failed during execution for step ${step.id}. Failing step.`, error);
-            throw error;
+            // No adapter recognized this element at all (e.g. a plain native
+            // <input type="date"> or an unrecognized simple widget) — the naive
+            // fallback is the only option available and may legitimately work
+            // since such elements do read their raw DOM value.
+            logger.warn('ExecutionEngine', `DatePickerEngine could not match any adapter for step ${step.id}. Falling back to native/direct interaction.`);
+            await this.fallbackDatePickerFill(el, resolvedValue);
           }
         } else {
           logger.warn('ExecutionEngine', `No resolved value provided for DATEPICKER action on step ${step.id}`);

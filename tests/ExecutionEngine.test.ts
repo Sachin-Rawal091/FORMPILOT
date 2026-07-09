@@ -168,8 +168,13 @@ describe('ExecutionEngine.executeAction', () => {
 
   it('SELECT — calls setSelectValue and waitForDOMStability', async () => {
     const sel = document.createElement('select');
+    const opt = document.createElement('option');
+    opt.value = 'option-value';
+    sel.appendChild(opt);
     document.body.appendChild(sel);
-    const setSpy = vi.spyOn(domUtils, 'setSelectValue');
+    const setSpy = vi.spyOn(domUtils, 'setSelectValue').mockImplementation((el, val) => {
+      (el as HTMLSelectElement).value = val;
+    });
     const waitSpy = vi.spyOn(SmartWaitEngine, 'waitForDOMStability').mockResolvedValue(true as any);
     await ExecutionEngine.executeAction(makeStep({ action: Action.SELECT, selectorMeta: {}, selector: '' }), makeSelectorResult(sel), 'option-value');
     expect(setSpy).toHaveBeenCalledWith(sel, 'option-value');

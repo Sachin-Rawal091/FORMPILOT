@@ -228,7 +228,8 @@ export class RetryEngine {
 
   private static isElementInteractable(el: HTMLElement): boolean {
     let current: HTMLElement | null = el;
-    while (current && current !== document.body) {
+    let depth = 0;
+    while (current && current !== document.body && depth < 20) {
       const style = window.getComputedStyle(current);
       if (style.pointerEvents === "none") {
         return false;
@@ -246,6 +247,7 @@ export class RetryEngine {
       }
       
       current = current.parentElement;
+      depth++;
     }
     return true;
   }

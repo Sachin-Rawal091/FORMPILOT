@@ -24,6 +24,15 @@ export function sendToBackground<T>(msg: FormPilotMessage<T>): Promise<FormPilot
 /**
  * Sends a message to a specific content script tab.
  */
-export async function sendToContentScript<T>(tabId: number, msg: FormPilotMessage<T>): Promise<FormPilotMessage> {
-  return chrome.tabs.sendMessage(tabId, msg);
+export async function sendToContentScript<T>(tabId: number, msg: FormPilotMessage<T>): Promise<FormPilotMessage | null> {
+  try {
+    return await chrome.tabs.sendMessage(tabId, msg);
+  } catch (err) {
+    const rawMessage = (err as Error).message || 'Unknown content script messaging error';
+    const errorMessage = rawMessage.toLowerCase();
+    if (!errorMessage.includes('receiving end does not exist') && !errorMessage.includes('no listener')) {
+      logger.warn('Messages', `sendToContentScript failed for type ${msg.type} on tab ${tabId}: ${rawMessage}`);
+    }
+    return null;
+  }
 }
