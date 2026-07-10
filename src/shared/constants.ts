@@ -35,6 +35,7 @@ export const DOUBLE_CLICK_WINDOW_MS = 200;
 // Selector
 export const SHADOW_TRAVERSAL_LIMIT = 500;
 export const MIN_SELECTOR_CONFIDENCE = 0.4;
+export const XPATH_MAX_DEPTH = 10;
 
 // Excel
 export const EXCEL_HEADER_SCAN_ROWS = 5;

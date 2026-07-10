@@ -143,29 +143,31 @@ export class Executor {
             break;
           }
           const payload = message.payload as { recordingId: string; sessionId: string };
-          this.start(payload?.recordingId, payload?.sessionId || message.sessionId, message.tabId);
+          this.start(payload?.recordingId, payload?.sessionId || message.sessionId, message.tabId)
+            .catch(err => logger.error('Executor', 'START_EXECUTION handler failed:', err));
           break;
         }
         case MessageType.PAUSE_EXECUTION:
-          this.pause();
+          this.pause().catch(err => logger.error('Executor', 'PAUSE_EXECUTION handler failed:', err));
           break;
         case MessageType.RESUME_EXECUTION:
           if (!this.isRunning) {
             StateManager.getState().then((state) => {
               if (state && state.recordingId && state.sessionId) {
-                this.start(state.recordingId, state.sessionId);
+                this.start(state.recordingId, state.sessionId)
+                  .catch(err => logger.error('Executor', 'RESUME_EXECUTION start failed:', err));
               } else {
-                this.resume();
+                this.resume().catch(err => logger.error('Executor', 'RESUME_EXECUTION resume failed:', err));
               }
             }).catch(() => {
-              this.resume();
+              this.resume().catch(err => logger.error('Executor', 'RESUME_EXECUTION fallback resume failed:', err));
             });
           } else {
-            this.resume();
+            this.resume().catch(err => logger.error('Executor', 'RESUME_EXECUTION running resume failed:', err));
           }
           break;
         case MessageType.ABORT_EXECUTION:
-          this.abort();
+          this.abort().catch(err => logger.error('Executor', 'ABORT_EXECUTION handler failed:', err));
           break;
       }
       sendResponse({ received: true });

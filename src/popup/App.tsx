@@ -203,7 +203,7 @@ export const App: React.FC = () => {
           renderScreen()
         ) : (activeTab === 'home' || activeTab === 'logs' || activeTab === 'settings') ? (
           <div className="flex-1 overflow-hidden p-8 md:p-12 flex flex-col h-full">
-            <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0">
+            <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0 h-full">
               {renderScreen()}
             </div>
           </div>

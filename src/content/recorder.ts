@@ -1,5 +1,5 @@
 import { Step, Action, SelectorMeta, FormPilotMessage, MessageType, ExecutionState, ExecutionStatus } from "../types";
-import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS } from "../shared/constants";
+import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS, XPATH_MAX_DEPTH } from "../shared/constants";
 import { logger } from "../utils/logger";
 
 class RecordingEngine {
@@ -120,6 +120,12 @@ class RecordingEngine {
 
     const el = e.target as HTMLElement;
     if (!el) return;
+
+    // Skip recording clicks on checkboxes, radios, or their associated labels/containers
+    // to prevent double-recording (the native change handler will record TOGGLE_CHECKBOX / SELECT_RADIO)
+    if (this.isCheckboxOrRadioOrLabel(el)) {
+      return;
+    }
 
     logger.debug('Recorder', `Click event on <${el.tagName.toLowerCase()}> id=${el.id || 'none'} type=${el.getAttribute('type') || 'none'}`);
 
@@ -594,7 +600,7 @@ class RecordingEngine {
     let depth = 0;
     let anchor: string | null = null;
 
-    while (current && current.nodeType === Node.ELEMENT_NODE && depth < 5) {
+    while (current && current.nodeType === Node.ELEMENT_NODE && depth < XPATH_MAX_DEPTH) {
       const curId = typeof current.getAttribute === 'function' ? current.getAttribute("id") : null;
       // If we find an ancestor with a stable ID, anchor to it
       if (current !== el && curId && !this.isDynamicId(curId)) {
@@ -621,14 +627,7 @@ class RecordingEngine {
         sibling = sibling.previousSibling;
       }
 
-      const currNodeName = current.nodeName;
-      // Always include [1] if there are any siblings of the same type,
-      // even if this element is the first child — prevents ambiguous XPaths
-      const hasSameTypeSiblings = current.parentElement
-        ? Array.from(current.parentElement.children)
-            .filter(c => c.nodeName === currNodeName).length > 1
-        : false;
-      const pathIndex = (index > 0 || hasSameTypeSiblings) ? `[${index + 1}]` : "";
+      const pathIndex = index > 0 ? `[${index + 1}]` : "";
       paths.unshift(`${tagName}${pathIndex}`);
       
       current = current.parentElement;
@@ -640,6 +639,50 @@ class RecordingEngine {
     }
 
     return paths.length ? `//${paths.join("/")}` : "";
+  }
+
+  private isCheckboxOrRadioOrLabel(el: HTMLElement): boolean {
+    const tagName = el.tagName.toLowerCase();
+    if (tagName === "input") {
+      const type = (el as HTMLInputElement).type?.toLowerCase();
+      if (type === "checkbox" || type === "radio") {
+        return true;
+      }
+    }
+    if (tagName === "label") {
+      const label = el as HTMLLabelElement;
+      if (label.htmlFor) {
+        const target = document.getElementById(label.htmlFor);
+        if (target instanceof HTMLInputElement) {
+          const type = target.type?.toLowerCase();
+          if (type === "checkbox" || type === "radio") {
+            return true;
+          }
+        }
+      }
+      if (label.querySelector('input[type="checkbox"], input[type="radio"]')) {
+        return true;
+      }
+    }
+    const parentLabel = el.closest("label");
+    if (parentLabel) {
+      if (parentLabel.htmlFor) {
+        const target = document.getElementById(parentLabel.htmlFor);
+        if (target instanceof HTMLInputElement) {
+          const type = target.type?.toLowerCase();
+          if (type === "checkbox" || type === "radio") {
+            return true;
+          }
+        }
+      }
+      if (parentLabel.querySelector('input[type="checkbox"], input[type="radio"]')) {
+        return true;
+      }
+    }
+    if (el.querySelector('input[type="checkbox"], input[type="radio"]')) {
+      return true;
+    }
+    return false;
   }
 
   private generateUUID(): string {

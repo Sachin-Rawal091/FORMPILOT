@@ -5,7 +5,7 @@
   "main": "src/popup/main.tsx",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node verify_csp.js",
     "test": "vitest run"
   },
   "keywords": [],

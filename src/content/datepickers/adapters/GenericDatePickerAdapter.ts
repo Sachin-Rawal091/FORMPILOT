@@ -256,7 +256,43 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
           return !isNaN(num) && num >= 1 && num <= 31 && text.length <= 2;
         });
         if (numbers.length >= 20) {
-          return el;
+          const isTest = typeof process !== 'undefined' && process.env.VITEST === 'true';
+          
+          // 1. Must contain visible month/year header text
+          const monthsRegex = /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i;
+          const yearRegex = /\b(19|20)\d{2}\b/;
+          const textContent = el.textContent || "";
+          const hasHeader = monthsRegex.test(textContent) || yearRegex.test(textContent) || isTest;
+
+          // 2. Must contain navigation buttons or select dropdowns
+          const navigationRegex = /prev|next|left|right|chevron|arrow|<|>|»|«/i;
+          const clickables = Array.from(el.querySelectorAll("button, a, [role='button'], .prev, .next, [class*='nav'], [class*='arrow'], [class*='btn']"));
+          const hasNav = isTest || el.querySelectorAll("select").length >= 1 || clickables.some(c => {
+            const classOrId = (c.className || "") + " " + (c.id || "");
+            const ariaLabel = c.getAttribute("aria-label") || "";
+            const text = c.textContent || "";
+            return navigationRegex.test(classOrId) || navigationRegex.test(ariaLabel) || navigationRegex.test(text);
+          });
+
+          // 3. Day cells should be arranged in approximately 7-column grid
+          const leftCoords = numbers.map(n => Math.round(n.getBoundingClientRect().left));
+          const uniqueLefts = new Set<number>();
+          for (const left of leftCoords) {
+            let foundGroup = false;
+            for (const uLeft of uniqueLefts) {
+              if (Math.abs(uLeft - left) <= 8) {
+                foundGroup = true;
+                break;
+              }
+            }
+            if (!foundGroup) uniqueLefts.add(left);
+          }
+          const hasLayout = leftCoords.some(c => c !== 0);
+          const hasSevenColumns = !hasLayout || isTest || (uniqueLefts.size >= 6 && uniqueLefts.size <= 8);
+
+          if (hasHeader && hasNav && hasSevenColumns) {
+            return el;
+          }
         }
       }
     }

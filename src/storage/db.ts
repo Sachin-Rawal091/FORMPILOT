@@ -4,7 +4,7 @@ const DB_NAME = 'FormPilotDB';
 const DB_VERSION = 5; // v5 ensures the sessionTimestamp index is created for everyone
 
 export async function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
+  const db = await openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         if (!db.objectStoreNames.contains('recordings')) {
@@ -47,4 +47,10 @@ export async function getDB(): Promise<IDBPDatabase> {
       }
     },
   });
+
+  db.addEventListener('versionchange', () => {
+    db.close();
+  });
+
+  return db;
 }

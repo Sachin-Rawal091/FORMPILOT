@@ -95,6 +95,16 @@ export class StateManager {
       throw new Error("Cannot update state: No active session found in storage.");
     }
 
+    // TOCTOU Race check: If the state in storage has already been marked as FAILED or COMPLETE,
+    // do not allow overwriting it back to an active/running state (RUNNING, PAUSED, CAPTCHA_PAUSED).
+    if (
+      (currentState.status === ExecutionStatus.FAILED || currentState.status === ExecutionStatus.COMPLETE) &&
+      (updates.status !== ExecutionStatus.FAILED && updates.status !== ExecutionStatus.COMPLETE)
+    ) {
+      logger.warn("StateManager", `Blocked stale state update reverting status from ${currentState.status} to ${updates.status || currentState.status}`);
+      return currentState;
+    }
+
     const updatedState: ExecutionState = { 
       ...currentState, 
       ...updates,

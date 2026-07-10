@@ -206,8 +206,6 @@ class StorageManagerImpl {
     const totalCount = await db.count('logs');
     const overLimit = totalCount - maxEntries;
 
-    if (overLimit <= 0) return; // Nothing to do
-
     const tx = db.transaction('logs', 'readwrite');
     const index = tx.store.index('timestamp');
     let cursor = await index.openCursor();
@@ -215,14 +213,17 @@ class StorageManagerImpl {
     let deletedCount = 0;
     while (cursor) {
       const log = cursor.value;
-      const shouldDelete = log.timestamp < cutoffTime || deletedCount < overLimit;
+      const shouldDelete = (overLimit > 0 && deletedCount < overLimit) || log.timestamp < cutoffTime;
       
       if (shouldDelete) {
         await cursor.delete();
         deletedCount++;
         cursor = await cursor.continue();
       } else {
-        // Stop once we are past cutoff date and have deleted enough excess logs
+        // Since the index is sorted by timestamp ascending, once we are:
+        // 1. Below the maximum entry limit (deletedCount >= overLimit) AND
+        // 2. The current log's timestamp is >= cutoffTime
+        // We can safely stop since all subsequent logs are also >= cutoffTime
         break;
       }
     }
