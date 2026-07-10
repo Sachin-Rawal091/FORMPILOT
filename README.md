@@ -187,6 +187,7 @@ FormPilot is under active development, tracked against an internal production-re
 - [x] Core execution pipeline (Selector, Wait, Execution, Retry, State, Response, Logging engines)
 - [x] DatePicker adapter architecture with pluggable registry
 - [x] Multi-page "Save & Continue" resumable flows
+## future Development
 - [ ] Additional widget adapters (MUI, Ant Design date/select components)
 - [ ] Encryption at rest for stored recordings and run data
 - [ ] Session store retention policy
