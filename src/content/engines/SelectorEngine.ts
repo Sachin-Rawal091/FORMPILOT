@@ -26,58 +26,70 @@ export class SelectorEngine {
       if (el) evaluateResult({ element: el, strategy: SelectorStrategy.ID, confidence: 1.0, shadow: false });
     }
 
-    // If a raw selector is provided, try that as well with high confidence (e.g. primary captured selector)
-    if (selector && !bestResult) {
+    // 2. Name (0.95 confidence) - only use if unique to prevent false matches in checkbox/radio groups
+    if (meta.name) {
+      const elements = Array.from(document.querySelectorAll(`[name="${CSS.escape(meta.name)}"]`));
+      if (elements.length === 1) {
+        evaluateResult({ element: elements[0], strategy: SelectorStrategy.NAME, confidence: 0.95, shadow: false });
+      }
+    }
+
+    // 3. Aria-label (0.9 confidence)
+    if (meta.ariaLabel) {
+      const el = document.querySelector(`[aria-label="${CSS.escape(meta.ariaLabel)}"]`);
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.ARIA_LABEL, confidence: 0.9, shadow: false });
+    }
+
+    // 4. Label-linked (0.85 confidence for explicit/nested, 0.80 for proximity/sibling)
+    if (meta.labelText) {
+      const labels = Array.from(document.querySelectorAll("label, .form-label, .control-label, strong, b"));
+      const matchingLabel = labels.find((l) => l.textContent?.trim() === meta.labelText);
+      if (matchingLabel) {
+        // 4a. Explicit 'for' link
+        const targetId = matchingLabel.getAttribute("for");
+        if (targetId) {
+          const el = document.getElementById(targetId);
+          if (el) evaluateResult({ element: el, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.85, shadow: false });
+        }
+        
+        // 4b. Nested input inside label
+        const nestedInput = matchingLabel.querySelector("input, select, textarea");
+        if (nestedInput) {
+          evaluateResult({ element: nestedInput, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.85, shadow: false });
+        }
+
+        // 4c. Sibling/proximity input inside the same parent or container group
+        let siblingInput = matchingLabel.parentElement?.querySelector("input, select, textarea") as HTMLElement | null;
+        if (!siblingInput) {
+          const container = matchingLabel.closest(".form-group, .col-md-6, .col-sm-6, .form-row, td, tr") || matchingLabel.parentElement?.parentElement;
+          if (container) {
+            siblingInput = container.querySelector("input, select, textarea") as HTMLElement | null;
+          }
+        }
+        if (siblingInput) {
+          evaluateResult({ element: siblingInput, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.80, shadow: false });
+        }
+      }
+    }
+
+    // 5. Placeholder (0.8 confidence)
+    if (meta.placeholder) {
+      const el = document.querySelector(`[placeholder="${CSS.escape(meta.placeholder)}"]`);
+      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.PLACEHOLDER, confidence: 0.8, shadow: false });
+    }
+
+    // 6. Primary CSS selector (0.7 confidence) - dynamic index paths are treated as fallback
+    if (selector) {
       try {
         const el = document.querySelector(selector);
-        if (el) evaluateResult({ element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.95, shadow: false });
+        if (el) evaluateResult({ element: el, strategy: SelectorStrategy.CSS_PATH, confidence: 0.7, shadow: false });
       } catch (e) {
         // ignore invalid selector
       }
     }
 
-    // 2. Name (0.9 confidence) - only use if unique to prevent false matches in checkbox/radio groups
-    if (meta.name && !bestResult) {
-      const elements = Array.from(document.querySelectorAll(`[name="${CSS.escape(meta.name)}"]`));
-      if (elements.length === 1) {
-        evaluateResult({ element: elements[0], strategy: SelectorStrategy.NAME, confidence: 0.9, shadow: false });
-      }
-    }
-
-    // 3. Aria-label (0.85 confidence)
-    if (meta.ariaLabel && !bestResult) {
-      const el = document.querySelector(`[aria-label="${CSS.escape(meta.ariaLabel)}"]`);
-      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.ARIA_LABEL, confidence: 0.85, shadow: false });
-    }
-
-    // 4. Label-linked (0.8 confidence)
-    if (meta.labelText && !bestResult) {
-      const labels = Array.from(document.querySelectorAll("label"));
-      const matchingLabel = labels.find((l) => l.textContent?.trim() === meta.labelText);
-      if (matchingLabel) {
-        const targetId = matchingLabel.getAttribute("for");
-        if (targetId) {
-          const el = document.getElementById(targetId);
-          if (el) evaluateResult({ element: el, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false });
-        }
-        if (!bestResult) {
-          // check if input is nested inside label
-          const nestedInput = matchingLabel.querySelector("input, select, textarea");
-          if (nestedInput) {
-            evaluateResult({ element: nestedInput, strategy: SelectorStrategy.LABEL_LINKED, confidence: 0.8, shadow: false });
-          }
-        }
-      }
-    }
-
-    // 5. Placeholder (0.7 confidence)
-    if (meta.placeholder && !bestResult) {
-      const el = document.querySelector(`[placeholder="${CSS.escape(meta.placeholder)}"]`);
-      if (el) evaluateResult({ element: el, strategy: SelectorStrategy.PLACEHOLDER, confidence: 0.7, shadow: false });
-    }
-
-    // 6. XPath (0.4 confidence)
-    if (meta.xpath && !bestResult) {
+    // 7. XPath (0.4 confidence) - fragile path fallback
+    if (meta.xpath) {
       try {
         const result = document.evaluate(
           meta.xpath,
@@ -99,12 +111,10 @@ export class SelectorEngine {
       }
     }
 
-    // 7. Shadow DOM (0.6 confidence)
-    if (!bestResult) {
-      const shadowMatch = this.findInShadowDOM(meta, selector);
-      if (shadowMatch) {
-        evaluateResult(shadowMatch);
-      }
+    // 8. Shadow DOM (0.6 confidence)
+    const shadowMatch = this.findInShadowDOM(meta, selector);
+    if (shadowMatch) {
+      evaluateResult(shadowMatch);
     }
 
     return bestResult;

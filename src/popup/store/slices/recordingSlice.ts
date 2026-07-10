@@ -35,6 +35,18 @@ export const createRecordingSlice: StateCreator<any, [], [], RecordingSlice> = (
   startRecording: async (url: string) => {
     const recordingId = crypto.randomUUID();
     
+    // Save recording state in storage BEFORE navigating or creating tabs
+    try {
+      await StorageManager.setRecordingState({
+        isRecording: true,
+        activeRecordingSteps: [],
+        activeRecordingUrl: url,
+        recordingId: recordingId
+      });
+    } catch (err) {
+      logger.error('RecordingSlice', 'Failed to pre-set recording state in storage:', err);
+    }
+
     set({
       activeRecordingSteps: [],
       activeRecordingUrl: url,

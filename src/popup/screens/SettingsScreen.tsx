@@ -54,10 +54,10 @@ export const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="flex flex-col h-full min-h-0 gap-8 animate-fade-in">
       
       {/* Title block */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 shrink-0">
         <h2 className="text-2xl font-semibold font-outfit tracking-wide text-slate-900 dark:text-white">
           Configuration Settings
         </h2>
@@ -66,7 +66,7 @@ export const SettingsScreen: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-4 items-start">
         
         {/* Left Grid: Custom Settings Sliders */}
         <div className="lg:col-span-7 space-y-6">
@@ -141,50 +141,6 @@ export const SettingsScreen: React.FC = () => {
               </p>
             </div>
           </div>
-
-          <div className="p-6 rounded-card bg-white dark:bg-fp-card-dark shadow-sm space-y-6">
-            <h3 className="text-base font-semibold font-outfit text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-850 pb-3">
-              Diagnostic Logs Configuration
-            </h3>
-
-            {/* Input 1: Log Max Entries */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Capped Log Entries Buffer</span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-normal">
-                  Maximum entries saved per logging session.
-                </span>
-              </div>
-              <input
-                type="number"
-                min="50"
-                max="10000"
-                step="50"
-                value={settings.logMaxEntries || 1000}
-                onChange={(e) => handleSliderChange('logMaxEntries', parseInt(e.target.value) || 1000)}
-                className="w-full sm:w-36 px-4 py-2.5 border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-800 dark:text-slate-200 text-xs font-semibold font-mono focus:outline-none focus:border-fp-accent dark:focus:border-white"
-              />
-            </div>
-
-            {/* Input 2: Log Retention Days */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Retention Period</span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-normal">
-                  Auto-clean diagnostic logs older than this duration.
-                </span>
-              </div>
-              <input
-                type="number"
-                min="1"
-                max="120"
-                step="1"
-                value={settings.logRetentionDays || 30}
-                onChange={(e) => handleSliderChange('logRetentionDays', parseInt(e.target.value) || 30)}
-                className="w-full sm:w-36 px-4 py-2.5 border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-855 text-slate-800 dark:text-slate-200 text-xs font-semibold font-mono focus:outline-none focus:border-fp-accent dark:focus:border-white"
-              />
-            </div>
-          </div>
         </div>
 
         {/* Right Grid: Theme & Database Administration */}
@@ -230,6 +186,51 @@ export const SettingsScreen: React.FC = () => {
             </div>
           </div>
 
+          {/* Diagnostic Logs Configuration */}
+          <div className="p-6 rounded-card bg-white dark:bg-fp-card-dark shadow-sm space-y-6">
+            <h3 className="text-base font-semibold font-outfit text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-850 pb-3">
+              Diagnostic Logs Configuration
+            </h3>
+
+            {/* Input 1: Log Max Entries */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Capped Log Buffer</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-normal">
+                  Max logs per session.
+                </span>
+              </div>
+              <input
+                type="number"
+                min="50"
+                max="10000"
+                step="50"
+                value={settings.logMaxEntries || 1000}
+                onChange={(e) => handleSliderChange('logMaxEntries', parseInt(e.target.value) || 1000)}
+                className="w-full sm:w-28 px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-800 dark:text-slate-200 text-xs font-semibold font-mono focus:outline-none focus:border-fp-accent dark:focus:border-white"
+              />
+            </div>
+
+            {/* Input 2: Log Retention Days */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Retention Period</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-normal">
+                  Auto-clean age limit.
+                </span>
+              </div>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                step="1"
+                value={settings.logRetentionDays || 30}
+                onChange={(e) => handleSliderChange('logRetentionDays', parseInt(e.target.value) || 30)}
+                className="w-full sm:w-28 px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-855 text-slate-800 dark:text-slate-200 text-xs font-semibold font-mono focus:outline-none focus:border-fp-accent dark:focus:border-white"
+              />
+            </div>
+          </div>
+
           {/* Database Admin Card */}
           <div className="p-6 rounded-card bg-white dark:bg-fp-card-dark shadow-sm space-y-4">
             <h3 className="text-base font-semibold font-outfit text-slate-800 dark:text-slate-200">
@@ -256,39 +257,47 @@ export const SettingsScreen: React.FC = () => {
 
       {/* Confirmation Wipe Dialog Modal */}
       {showWipeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md border border-rose-500/20 rounded-card bg-white dark:bg-fp-card-dark p-6 space-y-6 shadow-2xl animate-fade-in text-slate-950 dark:text-slate-100">
-            <div className="space-y-2">
-              <h4 className="text-base font-semibold font-outfit text-rose-600 dark:text-rose-500 flex items-center gap-2">
-                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m0 3.75h.008v.008H12V16.5zm-7.5 3h15L12 4.5 4.5 19.5z" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-md border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-[#121214] p-6 space-y-6 shadow-2xl animate-fade-in text-slate-950 dark:text-slate-100">
+            
+            {/* Header Block with Premium Red Warn Icon */}
+            <div className="flex gap-4 items-start text-left">
+              <div className="w-10 h-10 rounded-full bg-rose-500/10 dark:bg-rose-500/5 flex items-center justify-center text-rose-600 dark:text-rose-500 shrink-0 border border-rose-500/20">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span>Critical Database Wipe Action</span>
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                This will completely wipe all saved workflows, column mapping data, logs history, and cache. This action cannot be undone.
-              </p>
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-semibold font-outfit text-slate-900 dark:text-white leading-none">
+                  Critical Database Wipe Action
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  This will completely delete all recorded workflows, column mappings, execution logs, and uploaded files. This action is permanent and cannot be undone.
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest pl-0.5 font-sans">
+            {/* Input authorization */}
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-0.5">
                 Type "WIPE" to authorize
               </label>
               <input
                 type="text"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
-                placeholder="e.g. WIPE"
-                className="w-full px-4 py-3 text-xs border-2 rounded-xl bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-850 font-semibold font-mono text-center tracking-widest focus:outline-none focus:border-rose-500 uppercase text-slate-800 dark:text-slate-200"
+                placeholder="Type WIPE to authorize"
+                className="w-full px-4 py-2.5 text-xs border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-rose-500 font-mono text-center tracking-widest uppercase transition-all duration-200"
               />
             </div>
 
             {wipeStatus && (
-              <div className="text-xs text-center font-semibold text-slate-600 dark:text-indigo-400 font-mono">
+              <div className="text-xs text-center font-semibold text-rose-600 dark:text-rose-450 font-mono bg-rose-500/5 py-2 rounded-xl border border-rose-500/10">
                 {wipeStatus}
               </div>
             )}
 
+            {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -296,14 +305,14 @@ export const SettingsScreen: React.FC = () => {
                   setConfirmText('');
                   setWipeStatus('');
                 }}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-full hover:bg-slate-200 active:scale-95 transition"
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl active:scale-95 transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleWipeDatabase}
                 disabled={confirmText !== 'WIPE'}
-                className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-semibold text-xs rounded-full shadow-lg shadow-rose-600/10 active:scale-95 transition"
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-500/10 disabled:text-rose-500/40 disabled:border-rose-500/10 border border-transparent text-white font-semibold text-xs rounded-xl shadow-lg shadow-rose-600/10 active:scale-95 disabled:active:scale-100 transition-all duration-200 disabled:cursor-not-allowed"
               >
                 Authorize Wipe
               </button>

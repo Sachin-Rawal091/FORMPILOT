@@ -304,8 +304,14 @@ export class ExecutionEngine {
             }
 
             if (checkboxInput.checked !== desiredState) {
+              // 1. Dispatch click events to trigger React/Vue handlers naturally.
+              dispatchEvents(checkboxInput, ["mousedown", "mouseup", "click"]);
+              
+              // 2. Always follow up with direct property set and change/input event dispatch
+              // to ensure maximum framework compatibility and readback verification.
               setCheckboxValue(checkboxInput, desiredState);
-              // BUG-101: Readback verification
+              
+              // 3. Readback verification
               if (checkboxInput.checked !== desiredState) {
                 throw new Error(`Checkbox failed to toggle to ${desiredState}.`);
               }

@@ -346,7 +346,7 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
       });
 
       if (targetTabId) {
-        await sendMessageWithRetry(targetTabId, message);
+        await sendMessageWithSelfHeal(targetTabId, message);
       }
     };
 

@@ -7,6 +7,7 @@ import { createSettingsSlice, SettingsSlice } from './slices/settingsSlice';
 
 import { StorageManager } from '../../storage/StorageManager';
 import { 
+  Action,
   ExecutionState, 
   ExecutionStatus, 
   MessageType, 
@@ -142,11 +143,44 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
             if (message.payload?.step) {
               const step = message.payload.step as Step;
               const url = message.payload.url as string;
-              set((prev) => ({
-                activeRecordingSteps: [...prev.activeRecordingSteps, step],
-                activeRecordingUrl: url || prev.activeRecordingUrl,
-                isRecording: true
-              }));
+              
+              const mergeableActions = [
+                Action.SELECT,
+                Action.FILL,
+                Action.SELECT_RADIO,
+                Action.TOGGLE_CHECKBOX,
+                Action.DATEPICKER,
+                Action.RICH_TEXT
+              ];
+
+              set((prev: any) => {
+                const steps = [...prev.activeRecordingSteps];
+                const lastStep = steps[steps.length - 1];
+                if (
+                  lastStep &&
+                  lastStep.action === step.action &&
+                  lastStep.selector === step.selector &&
+                  mergeableActions.includes(step.action)
+                ) {
+                  const updatedSteps = [...steps];
+                  updatedSteps[updatedSteps.length - 1] = {
+                    ...lastStep,
+                    value: step.value,
+                    checked: step.checked
+                  };
+                  return {
+                    activeRecordingSteps: updatedSteps,
+                    activeRecordingUrl: url || prev.activeRecordingUrl,
+                    isRecording: true
+                  };
+                } else {
+                  return {
+                    activeRecordingSteps: [...steps, step],
+                    activeRecordingUrl: url || prev.activeRecordingUrl,
+                    isRecording: true
+                  };
+                }
+              });
             }
             break;
           }

@@ -126,7 +126,7 @@ class RecordingEngine {
     const tagName = el.tagName.toLowerCase();
 
     // Ignore normal value inputs but allow submit buttons/inputs to be clicked and recorded
-    if (tagName === "input" || tagName === "select" || tagName === "textarea") {
+    if (tagName === "input" || tagName === "textarea") {
       const typeAttr = el.getAttribute("type")?.toLowerCase() || "";
       if (typeAttr !== "submit" && typeAttr !== "button" && typeAttr !== "image") {
         return;
@@ -212,7 +212,13 @@ class RecordingEngine {
           if (!this.isInsideDatePicker(targetElement)) {
             // If no input was changed programmatically, or it is a control click, record the click
             if (!programmaticChangeDetected || isControlClick) {
-              this.addRecordedStep(Action.CLICK, targetElement);
+              const selectEl = el.tagName.toLowerCase() === "select" ? el : el.closest("select");
+              if (selectEl) {
+                const selectVal = (selectEl as HTMLSelectElement).value;
+                this.addRecordedStep(Action.SELECT, selectEl, selectVal);
+              } else {
+                this.addRecordedStep(Action.CLICK, targetElement);
+              }
             }
           }
         }
@@ -431,31 +437,102 @@ class RecordingEngine {
     }
 
     // Try label finding
-    if (el.id) {
-      const label = document.querySelector(`label[for="${el.id}"]`);
-      if (label) {
-        meta.labelText = label.textContent?.trim();
-      }
-    }
-    
-    if (!meta.labelText) {
-      const parentLabel = el.closest("label");
-      if (parentLabel) {
-        // BUG-012: Get only direct text nodes, not descendant text (avoids including
-        // input values, tooltips, and icon text that make selectors unmatchable)
-        meta.labelText = Array.from(parentLabel.childNodes)
-          .filter(n => n.nodeType === Node.TEXT_NODE)
-          .map(n => n.textContent?.trim())
-          .filter(Boolean)
-          .join(' ')
-          .trim() || undefined;
-      }
-    }
+    meta.labelText = this.findAssociatedLabel(el);
 
     meta.cssPath = this.generateCssPath(el);
     meta.xpath = this.generateXPath(el);
 
     return meta;
+  }
+
+  private escapeValue(val: string): string {
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(val);
+    }
+    return val.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  private isDynamicId(id: string): boolean {
+    if (!id || typeof id !== 'string') return false;
+    if (/^(radix|headlessui|mui|jss|ng|ember|__BuiOuter|react-select-|dp-)/i.test(id)) {
+      return true;
+    }
+    if (/:/.test(id)) {
+      return true;
+    }
+    if (/\d{4,}/.test(id)) {
+      return true;
+    }
+    if (/[-_]\d+$/.test(id)) {
+      return true;
+    }
+    return false;
+  }
+
+  private cleanLabelText(label: HTMLElement): string {
+    if (!label || !label.childNodes) return "";
+    return Array.from(label.childNodes)
+      .filter(n => n && n.nodeType === Node.TEXT_NODE)
+      .map(n => n.textContent?.trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  }
+
+  private findAssociatedLabel(el: HTMLElement): string | undefined {
+    if (!el) return undefined;
+    const elId = typeof el.getAttribute === 'function' ? el.getAttribute("id") : null;
+    
+    // 1. Explicit label with 'for' attribute matching el.id
+    if (elId) {
+      try {
+        const label = document.querySelector(`label[for="${this.escapeValue(elId)}"]`);
+        if (label && label.textContent) {
+          return label.textContent.trim();
+        }
+      } catch (e) {
+        // ignore invalid selector
+      }
+    }
+
+    // 2. Nested label
+    const parentLabel = typeof el.closest === 'function' ? el.closest("label") : null;
+    if (parentLabel) {
+      return this.cleanLabelText(parentLabel);
+    }
+
+    // 3. Sibling label (e.g., label is preceding sibling or inside preceding sibling)
+    const container = typeof el.closest === 'function'
+      ? el.closest(".form-group, .col-md-6, .col-sm-6, .form-row, td, tr") || el.parentElement
+      : el.parentElement;
+    if (container && typeof container.querySelector === 'function') {
+      try {
+        const label = container.querySelector("label");
+        if (label && label.textContent) {
+          return label.textContent.trim();
+        }
+        
+        const customLabel = container.querySelector(".form-label, .control-label, strong, b");
+        if (customLabel && customLabel.textContent) {
+          return customLabel.textContent.trim();
+        }
+      } catch (e) {
+        // ignore invalid selector
+      }
+    }
+
+    // 4. Preceding sibling label
+    let prev = el.previousElementSibling;
+    while (prev) {
+      if (prev.tagName === "LABEL" || prev.classList.contains("form-label")) {
+        if (prev.textContent) {
+          return prev.textContent.trim();
+        }
+      }
+      prev = prev.previousElementSibling;
+    }
+
+    return undefined;
   }
 
   private generateCssPath(el: HTMLElement): string {
@@ -464,10 +541,23 @@ class RecordingEngine {
 
     while (current && current !== document.body && current.nodeType === Node.ELEMENT_NODE) {
       let selector = current.nodeName.toLowerCase();
-      if (current.id) {
-        selector += `#${current.id}`;
+      const nameAttr = typeof current.getAttribute === 'function' ? current.getAttribute("name") : null;
+      const curId = typeof current.getAttribute === 'function' ? current.getAttribute("id") : null;
+
+      if (curId && !this.isDynamicId(curId)) {
+        selector += `#${this.escapeValue(curId)}`;
         path.unshift(selector);
-        break; // Unique ID, can safely stop climbing
+        break; // Unique stable ID, stop climbing
+      } else if (nameAttr && !/^(radix|headlessui|react-select)/i.test(nameAttr)) {
+        selector += `[name="${this.escapeValue(nameAttr)}"]`;
+        try {
+          if (document.querySelectorAll(`[name="${this.escapeValue(nameAttr)}"]`).length === 1) {
+            path.unshift(selector);
+            break;
+          }
+        } catch (e) {
+          // ignore invalid querySelector
+        }
       } else {
         let sib = current.previousElementSibling;
         let nth = 1;
@@ -494,8 +584,9 @@ class RecordingEngine {
   }
 
   private generateXPath(el: HTMLElement): string {
-    if (el.id) {
-      return `//*[@id="${el.id}"]`;
+    const elId = typeof el.getAttribute === 'function' ? el.getAttribute("id") : null;
+    if (elId && !this.isDynamicId(elId)) {
+      return `//*[@id="${this.escapeValue(elId)}"]`;
     }
 
     const paths: string[] = [];
@@ -504,16 +595,17 @@ class RecordingEngine {
     let anchor: string | null = null;
 
     while (current && current.nodeType === Node.ELEMENT_NODE && depth < 5) {
-      // If we find an ancestor with an ID, anchor to it
-      if (current !== el && current.id) {
-        anchor = `//*[@id="${current.id}"]`;
+      const curId = typeof current.getAttribute === 'function' ? current.getAttribute("id") : null;
+      // If we find an ancestor with a stable ID, anchor to it
+      if (current !== el && curId && !this.isDynamicId(curId)) {
+        anchor = `//*[@id="${this.escapeValue(curId)}"]`;
         break;
       }
 
       const tagName = current.nodeName.toLowerCase();
       if (current !== el && (tagName === "form" || tagName === "fieldset")) {
-        if (current.id) {
-          anchor = `//${tagName}[@id="${current.id}"]`;
+        if (curId && !this.isDynamicId(curId)) {
+          anchor = `//${tagName}[@id="${this.escapeValue(curId)}"]`;
         } else {
           anchor = `//${tagName}`;
         }

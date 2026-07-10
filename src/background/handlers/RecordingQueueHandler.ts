@@ -1,5 +1,5 @@
 import { StorageManager } from "../../storage/StorageManager";
-import { Step } from "../../types";
+import { Action, Step } from "../../types";
 import { logger } from "../../utils/logger";
 
 export class RecordingQueueHandler {
@@ -89,7 +89,32 @@ export class RecordingQueueHandler {
       const state = await StorageManager.getRecordingState();
       if (state && state.isRecording) {
         const pendingSteps = [...this.stepQueue];
-        state.activeRecordingSteps.push(...pendingSteps);
+        
+        // Merge consecutive value-based steps on the same element
+        const mergeableActions = [
+          Action.SELECT,
+          Action.FILL,
+          Action.SELECT_RADIO,
+          Action.TOGGLE_CHECKBOX,
+          Action.DATEPICKER,
+          Action.RICH_TEXT
+        ];
+
+        for (const step of pendingSteps) {
+          const lastStep = state.activeRecordingSteps[state.activeRecordingSteps.length - 1];
+          if (
+            lastStep &&
+            lastStep.action === step.action &&
+            lastStep.selector === step.selector &&
+            mergeableActions.includes(step.action)
+          ) {
+            lastStep.value = step.value;
+            lastStep.checked = step.checked;
+          } else {
+            state.activeRecordingSteps.push(step);
+          }
+        }
+
         await StorageManager.setRecordingState(state);
         this.stepQueue.splice(0, pendingSteps.length);
         await this.persistQueue();

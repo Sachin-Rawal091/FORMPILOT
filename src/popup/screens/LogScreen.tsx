@@ -368,10 +368,10 @@ export const LogScreen: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="flex flex-col h-full min-h-0 gap-6 animate-fade-in">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200/60 dark:border-slate-800/60">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200/60 dark:border-slate-800/60 shrink-0">
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-semibold font-outfit tracking-wide text-slate-900 dark:text-white">
             Activity Logger
@@ -407,13 +407,13 @@ export const LogScreen: React.FC = () => {
 
       {/* MASTER VIEW (Workflows List) */}
       {!activeWorkflow ? (
-        <div className="space-y-6">
-          <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">
+        <div className="flex-1 flex flex-col min-h-0 gap-4">
+          <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1 shrink-0">
             Saved Workflows
           </div>
           
           {workflowsWithStatus.length === 0 ? (
-            <div className="p-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-card bg-white dark:bg-fp-card-dark flex flex-col items-center justify-center gap-4 shadow-sm">
+            <div className="p-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-card bg-white dark:bg-fp-card-dark flex flex-col items-center justify-center gap-4 shadow-sm flex-1">
               <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-600">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -425,7 +425,7 @@ export const LogScreen: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex-1 overflow-y-auto no-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 gap-6 items-start content-start">
               {workflowsWithStatus.map(({ recording, runCount, lastRunTimestamp, lastRunStatus }) => (
                 <div
                   key={recording.id}
@@ -495,10 +495,10 @@ export const LogScreen: React.FC = () => {
         </div>
       ) : (
         /* DETAIL VIEW */
-        <div className="space-y-8 animate-fade-in">
+        <div className="flex-1 flex flex-col min-h-0 gap-6">
           
           {/* Breadcrumbs & Navigation */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
             <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-400 dark:text-slate-500">
               <button 
                 onClick={() => {
@@ -543,69 +543,71 @@ export const LogScreen: React.FC = () => {
           </div>
 
           {/* Metrics Grid */}
-          {selectedSessionId ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Success: Filled */}
-              <div className="bg-gradient-to-br from-emerald-500/20 to-transparent p-[1px] rounded-2xl">
-                <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
-                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-450 uppercase tracking-widest pl-0.5">Rows Filled</span>
-                  <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
-                    {sessionMetrics.filled}
-                  </span>
+          <div className="shrink-0">
+            {selectedSessionId ? (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Success: Filled */}
+                <div className="bg-gradient-to-br from-emerald-500/20 to-transparent p-[1px] rounded-2xl">
+                  <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
+                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-450 uppercase tracking-widest pl-0.5">Rows Filled</span>
+                    <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
+                      {sessionMetrics.filled}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Danger: Failed */}
-              <div className="bg-gradient-to-br from-rose-500/20 to-transparent p-[1px] rounded-2xl">
-                <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
-                  <span className="text-[10px] font-semibold text-rose-550 dark:text-rose-450 uppercase tracking-widest pl-0.5">Rows Failed</span>
-                  <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
-                    {sessionMetrics.failed}
-                  </span>
+                {/* Danger: Failed */}
+                <div className="bg-gradient-to-br from-rose-500/20 to-transparent p-[1px] rounded-2xl">
+                  <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
+                    <span className="text-[10px] font-semibold text-rose-550 dark:text-rose-450 uppercase tracking-widest pl-0.5">Rows Failed</span>
+                    <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
+                      {sessionMetrics.failed}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Warning: Warnings */}
-              <div className="bg-gradient-to-br from-amber-500/20 to-transparent p-[1px] rounded-2xl">
-                <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
-                  <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-450 uppercase tracking-widest pl-0.5 font-sans">Warnings</span>
-                  <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
-                    {sessionMetrics.warnings}
-                  </span>
+                {/* Warning: Warnings */}
+                <div className="bg-gradient-to-br from-amber-500/20 to-transparent p-[1px] rounded-2xl">
+                  <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
+                    <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-450 uppercase tracking-widest pl-0.5 font-sans">Warnings</span>
+                    <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
+                      {sessionMetrics.warnings}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Default: Total */}
-              <div className="bg-gradient-to-br from-slate-500/20 to-transparent p-[1px] rounded-2xl">
-                <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
-                  <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-0.5">Total Rows</span>
-                  <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
-                    {sessionMetrics.total}
-                  </span>
+                {/* Default: Total */}
+                <div className="bg-gradient-to-br from-slate-500/20 to-transparent p-[1px] rounded-2xl">
+                  <div className="bg-white dark:bg-fp-card-dark h-full rounded-2xl p-5 flex flex-col justify-between">
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-0.5">Total Rows</span>
+                    <span className="text-3xl font-semibold font-outfit text-slate-800 dark:text-white mt-2 font-mono">
+                      {sessionMetrics.total}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="p-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-card bg-white dark:bg-fp-card-dark flex flex-col items-center justify-center gap-3 shadow-sm">
-              <svg className="w-10 h-10 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <div className="space-y-1">
-                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">No Runs Stored</h4>
-                <p className="text-xs text-slate-400">Launch this workflow from the home tab to capture execution logs.</p>
+            ) : (
+              <div className="p-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-card bg-white dark:bg-fp-card-dark flex flex-col items-center justify-center gap-3 shadow-sm">
+                <svg className="w-10 h-10 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">No Runs Stored</h4>
+                  <p className="text-xs text-slate-400">Launch this workflow from the home tab to capture execution logs.</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Logs Split Pane (only visible when we have a selected session) */}
           {selectedSessionId && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch flex-1 min-h-0">
               
               {/* Left Pane: Logs Stream & Filtering */}
-              <div className="lg:col-span-5 flex flex-col gap-4">
+              <div className="lg:col-span-5 flex flex-col gap-4 min-h-0 h-full">
                 
                 {/* Search bar */}
-                <div className="relative">
+                <div className="relative shrink-0">
                   <input
                     type="text"
                     placeholder="Search by selector, value, errors..."
@@ -665,7 +667,7 @@ export const LogScreen: React.FC = () => {
                 </div>
 
                 {/* List Scroll pane */}
-                <div className="flex-1 overflow-y-auto pr-2 space-y-3 max-h-[460px] scrollbar-thin">
+                <div className="flex-1 overflow-y-auto no-scrollbar pr-2 space-y-3 min-h-0">
                   {filteredLogs.length === 0 ? (
                     <div className="p-12 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-card bg-white dark:bg-fp-card-dark">
                       No logs matching filters found.
@@ -707,7 +709,7 @@ export const LogScreen: React.FC = () => {
               </div>
 
               {/* Right Pane: Step Debug inspector details */}
-              <div className="lg:col-span-7 flex flex-col">
+              <div className="lg:col-span-7 flex flex-col min-h-0 h-full overflow-y-auto no-scrollbar">
                 {selectedLog ? (
                   <div className="flex-1 p-6 rounded-card bg-white dark:bg-fp-card-dark shadow-sm space-y-6">
                     

@@ -35,7 +35,7 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(input);
     expect(result!.strategy).toBe(SelectorStrategy.CSS_PATH);
-    expect(result!.confidence).toBe(0.95);
+    expect(result!.confidence).toBe(0.7);
   });
 
   it('should find element by Name attribute', () => {
@@ -47,7 +47,7 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(input);
     expect(result!.strategy).toBe(SelectorStrategy.NAME);
-    expect(result!.confidence).toBe(0.9);
+    expect(result!.confidence).toBe(0.95);
   });
 
   it('should find element by ARIA label', () => {
@@ -59,7 +59,7 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(button);
     expect(result!.strategy).toBe(SelectorStrategy.ARIA_LABEL);
-    expect(result!.confidence).toBe(0.85);
+    expect(result!.confidence).toBe(0.9);
   });
 
   it('should find element by Label linked via labelText text content', () => {
@@ -75,7 +75,7 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(input);
     expect(result!.strategy).toBe(SelectorStrategy.LABEL_LINKED);
-    expect(result!.confidence).toBe(0.8);
+    expect(result!.confidence).toBe(0.85);
   });
 
   it('should find nested input inside Label matched by labelText', () => {
@@ -89,7 +89,24 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(input);
     expect(result!.strategy).toBe(SelectorStrategy.LABEL_LINKED);
-    expect(result!.confidence).toBe(0.8);
+    expect(result!.confidence).toBe(0.85);
+  });
+
+  it('should find sibling/proximity input inside the same parent or container group by labelText', () => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+    const label = document.createElement('label');
+    label.textContent = 'Proximity Label';
+    const input = document.createElement('input');
+    formGroup.appendChild(label);
+    formGroup.appendChild(input);
+    document.body.appendChild(formGroup);
+
+    const result = SelectorEngine.findElement({ labelText: 'Proximity Label' }, '');
+    expect(result).not.toBeNull();
+    expect(result!.element).toBe(input);
+    expect(result!.strategy).toBe(SelectorStrategy.LABEL_LINKED);
+    expect(result!.confidence).toBe(0.80);
   });
 
   it('should find element by placeholder', () => {
@@ -101,7 +118,7 @@ describe('SelectorEngine', () => {
     expect(result).not.toBeNull();
     expect(result!.element).toBe(input);
     expect(result!.strategy).toBe(SelectorStrategy.PLACEHOLDER);
-    expect(result!.confidence).toBe(0.7);
+    expect(result!.confidence).toBe(0.8);
   });
 
   it('should return null for CSS Path when selector is empty (redundant 0.5 layer removed)', () => {

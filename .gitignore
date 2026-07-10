@@ -87,6 +87,8 @@ lerna-debug.log*
 # --- Agent Caches & Workspace Diagnostics ---
 .antigravity/
 .gemini/
+.claude/
+.copilot/
 scratch/
 .tempmediaStorage/
 agent_temp/
