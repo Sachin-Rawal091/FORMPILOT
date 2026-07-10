@@ -21,9 +21,21 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 
 ## 🎬 See it in action
 
-> _Add a screen recording or GIF here — nothing sells "resilient form automation" like watching it survive a re-render._
->
-> `docs/demo.gif` · `docs/screenshot-dashboard.png`
+### 1. Saved Automation Workflows
+FormPilot manages your recorded sequences in a clean dashboard. You can trigger, edit, or delete executions directly from the popup interface.
+![Saved Workflows](live_demo_screenshots/10_popup_saved_flows.png)
+
+### 2. Column Mapping Interface
+Upload any Excel data sheet (`.xlsx`, `.xls`, `.csv`) and map spreadsheet columns to your form fields in seconds.
+![Spreadsheet Column Mapping](live_demo_screenshots/12_popup_data_mapped.png)
+
+### 3. Live Auto-Fill Execution
+Watch FormPilot drive the Chrome tab automatically, filling out multi-page structures with smart date-pickers, radio groups, text inputs, and validation checks.
+![Live Form Fill in Progress](live_demo_screenshots/07_portal_row03_t32s.png)
+
+### 4. Resilient Completion Logs
+Upon completion, review detailed reports, duration metrics, skipped rows, and self-healed step executions.
+![Execution Success Status](live_demo_screenshots/70_FINAL_popup_state.png)
 
 ---
 
