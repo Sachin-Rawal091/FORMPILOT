@@ -46,6 +46,10 @@ export interface SelectorMeta {
   ariaLabel?: string;
   placeholder?: string;
   labelText?: string;
+  /** BUG-NEW-6: data-testid or data-test-id attribute value */
+  testId?: string;
+  /** BUG-NEW-6: ARIA role attribute value */
+  role?: string;
   cssPath?: string;
   xpath?: string;
 }

@@ -31,6 +31,10 @@ export const POST_SUBMIT_SETTLE_MS = 1500;
 // Recorder
 export const INPUT_DEBOUNCE_MS = 300;
 export const DOUBLE_CLICK_WINDOW_MS = 200;
+// BUG-NEW-1 fix: safety-clear ceiling for the submit-click recording latch — if no
+// native submit event follows a recorded submit-type click within this window, the
+// latch resets so a later, genuinely separate submit isn't incorrectly suppressed.
+export const SUBMIT_LATCH_SAFETY_MS = 800;
 
 // Selector
 export const SHADOW_TRAVERSAL_LIMIT = 500;

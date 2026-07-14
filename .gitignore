@@ -93,6 +93,8 @@ scratch/
 .tempmediaStorage/
 agent_temp/
 issue.md
+bug.md
+FormPilot_RecordingEngine_Fix_Plan.md
 
 # --- Local Sandbox & Test Scripts ---
 # Mock portals and local servers used only for offline sandbox testing
@@ -120,6 +122,8 @@ record_and_print_steps.js
 verify_job_automation_live.js
 verify_rmdp_automation_live.js
 verify_student_automation_live.js
+create_demo_gif.js
+
 
 # --- Agent Protocol Files ---
 # Ignored to prevent agent state churn in project git history

@@ -1,8 +1,8 @@
 import { Step, Action, SelectorMeta, FormPilotMessage, MessageType, ExecutionState, ExecutionStatus } from "../types";
-import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS, XPATH_MAX_DEPTH } from "../shared/constants";
+import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS, XPATH_MAX_DEPTH, SUBMIT_LATCH_SAFETY_MS } from "../shared/constants";
 import { logger } from "../utils/logger";
 
-class RecordingEngine {
+export class RecordingEngine {
   private isRecording = false;
   private recordingId = "";
   private currentStepIndex = 0;
@@ -10,7 +10,11 @@ class RecordingEngine {
   private lastClickedElement: HTMLElement | null = null;
   private debounceTimers: WeakMap<HTMLElement, ReturnType<typeof setTimeout>> = new WeakMap();
   private activeTimers: Set<ReturnType<typeof setTimeout>> = new Set();
-  private lastButtonSubmitTime = 0;
+  // BUG-NEW-1 fix: replaces the old lastButtonSubmitTime timestamp comparison.
+  // true once a submit-type click has been recorded synchronously, until either
+  // the correlated native submit event is observed or the safety timer clears it.
+  private recentClickWasSubmit = false;
+  private submitLatchSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.setupMessageListener();
@@ -34,6 +38,13 @@ class RecordingEngine {
           // Clear all pending debounce timers to prevent steps being recorded after stop
           this.activeTimers.forEach(timer => clearTimeout(timer));
           this.activeTimers.clear();
+          // BUG-NEW-1 fix: also reset the submit latch so state doesn't leak into a
+          // subsequent recording session.
+          if (this.submitLatchSafetyTimer) {
+            clearTimeout(this.submitLatchSafetyTimer);
+            this.submitLatchSafetyTimer = null;
+          }
+          this.recentClickWasSubmit = false;
           logger.info('Recorder', `Recording stopped/prevented due to message type: ${MessageType[message.type]}`);
           break;
       }
@@ -99,6 +110,9 @@ class RecordingEngine {
     // Navigation tracking
     window.addEventListener("popstate", () => this.handleNavigationEvent());
     window.addEventListener("hashchange", () => this.handleNavigationEvent());
+    // BUG-NEW-3 fix: Track pushState/replaceState for SPA navigation (React Router, Next.js, Vue Router)
+    window.addEventListener("fp:locationchange", () => this.handleNavigationEvent());
+    this.wrapHistoryMethods();
     
     logger.debug('Recorder', 'DOM event listeners attached.');
   }
@@ -113,6 +127,29 @@ class RecordingEngine {
     }).catch((err) => {
       logger.warn('Recorder', 'PAGE_NAVIGATED message failed:', err);
     });
+  }
+
+  /**
+   * BUG-NEW-3 fix: Monkey-patch history.pushState/replaceState to dispatch navigation events.
+   * pushState/replaceState do not fire popstate — this is the standard approach for SPA tracking.
+   */
+  private wrapHistoryMethods() {
+    // Guard: don't double-wrap if content script re-injects on the same page
+    if ((history.pushState as any).__fpWrapped) return;
+    // Note: originals may themselves already be wrappers (e.g. from analytics or other extensions).
+    // Capturing whatever is currently installed preserves the existing chain.
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    history.pushState = function (...args: Parameters<typeof history.pushState>) {
+      originalPushState.apply(this, args);
+      window.dispatchEvent(new Event('fp:locationchange'));
+    };
+    (history.pushState as any).__fpWrapped = true;
+    history.replaceState = function (...args: Parameters<typeof history.replaceState>) {
+      originalReplaceState.apply(this, args);
+      window.dispatchEvent(new Event('fp:locationchange'));
+    };
+    (history.replaceState as any).__fpWrapped = true;
   }
 
   private handleClickEvent(e: MouseEvent) {
@@ -139,6 +176,11 @@ class RecordingEngine {
       }
     }
 
+    // BUG-NEW-2 fix: Skip native <select>/<option> clicks — handleChangeEvent owns SELECT recording
+    if (tagName === "select" || tagName === "option") {
+      return;
+    }
+
     const button = el.closest("button");
     const targetElement = button || el;
 
@@ -148,7 +190,25 @@ class RecordingEngine {
       (tagName === "input" && el.getAttribute("type") === "submit");
 
     if (isSubmitButton) {
-      this.lastButtonSubmitTime = Date.now();
+      // BUG-NEW-1 fix: record the submit-type click synchronously, before any
+      // deferred timer. If the click triggers real page navigation, the deferred
+      // checkChanges chain (up to 500ms out) would never get a chance to run —
+      // this was silently losing the exact "Save & Continue" step the extension
+      // exists to automate. Prefer the enclosing <form> as the recorded element
+      // to match how handleSubmitEvent has always recorded SUBMIT steps (and how
+      // ExecutionEngine's Action.SUBMIT handler expects to receive one); fall
+      // back to the button itself if there's no enclosing form.
+      const formEl = targetElement.closest("form") as HTMLFormElement | null;
+      this.addRecordedStep(Action.SUBMIT, formEl || targetElement);
+
+      this.recentClickWasSubmit = true;
+      if (this.submitLatchSafetyTimer) {
+        clearTimeout(this.submitLatchSafetyTimer);
+      }
+      this.submitLatchSafetyTimer = setTimeout(() => {
+        this.recentClickWasSubmit = false;
+        this.submitLatchSafetyTimer = null;
+      }, SUBMIT_LATCH_SAFETY_MS);
     }
 
     // Deduplication of double-clicks
@@ -209,6 +269,12 @@ class RecordingEngine {
 
         // On the final check interval, if no programmatic changes occurred, record the click if appropriate
         if (idx === intervals.length - 1) {
+          // BUG-NEW-1 fix: submit-type clicks were already recorded synchronously
+          // above as Action.SUBMIT — skip the CLICK/SELECT fallback entirely for them.
+          if (isSubmitButton) {
+            return;
+          }
+
           const isControlClick = this.isButtonOrLink(targetElement) && !this.isInsideDatePicker(targetElement);
 
           // BUG-042: Clicks inside a date picker (or on a calendar backdrop/overlay/popup wrapper)
@@ -241,7 +307,10 @@ class RecordingEngine {
     
     // Check classes
     const classList = Array.from(el.classList);
-    if (classList.some(c => /btn|button/i.test(c))) return true;
+    // BUG-NEW-9 fix: anchor the pattern so substrings like "disabled-button-label"
+    // don't false-positive as a control click. We only want to match when "btn" or "button"
+    // is a standalone word or term (e.g. "btn-primary", "primary-btn"), not a partial substring.
+    if (classList.some(c => /^(?:btn|button)(?:[-_].*)?$/i.test(c) || /^.*[-_](?:btn|button)$/i.test(c))) return true;
     
     return false;
   }
@@ -250,7 +319,9 @@ class RecordingEngine {
     let current: HTMLElement | null = el;
     while (current && current !== document.body) {
       const idOrClass = (current.id || "") + " " + (current.className || "");
-      if (/datepicker|calendar|rmdp|flatpickr|ui-datepicker|backdrop|overlay/i.test(idOrClass)) {
+      // BUG-NEW-7 fix: Removed generic 'backdrop'/'overlay' terms that over-matched
+      // MUI modals, Bootstrap dropdowns, and AntD components.
+      if (/datepicker|calendar|rmdp|flatpickr|ui-datepicker/i.test(idOrClass)) {
         return true;
       }
       current = current.parentElement;
@@ -342,12 +413,22 @@ class RecordingEngine {
     const formEl = e.target as HTMLFormElement;
     if (!formEl) return;
 
-    // Deduplicate submit events triggered by an already recorded button/input click
-    if (Date.now() - this.lastButtonSubmitTime < 200) {
-      logger.info('Recorder', 'Ignored SUBMIT event because it was already recorded as a button click.');
+    // BUG-NEW-1 / BUG-NEW-9 fix: use the synchronous-recording latch instead of a
+    // fixed timestamp window. A fixed window can't simultaneously be "long enough"
+    // for slow validation/captcha-gated submits and "short enough" not to eat a
+    // genuinely separate second submit — the latch is cleared deterministically by
+    // whichever happens first: this event firing, or the safety timeout.
+    if (this.recentClickWasSubmit) {
+      logger.info('Recorder', 'Ignored native submit event because it was already recorded synchronously on click.');
+      this.recentClickWasSubmit = false;
+      if (this.submitLatchSafetyTimer) {
+        clearTimeout(this.submitLatchSafetyTimer);
+        this.submitLatchSafetyTimer = null;
+      }
       return;
     }
 
+    // No preceding click recorded this submit (e.g. Enter-key submission) — record directly.
     this.addRecordedStep(Action.SUBMIT, formEl);
   }
 
@@ -445,6 +526,16 @@ class RecordingEngine {
     // Try label finding
     meta.labelText = this.findAssociatedLabel(el);
 
+    // BUG-NEW-6 fix: Capture data-testid and role for higher-fidelity selector metadata
+    const testId = el.getAttribute("data-testid") || el.getAttribute("data-test-id");
+    if (testId) {
+      meta.testId = testId;
+    }
+    const role = el.getAttribute("role");
+    if (role) {
+      meta.role = role;
+    }
+
     meta.cssPath = this.generateCssPath(el);
     meta.xpath = this.generateXPath(el);
 
@@ -460,7 +551,8 @@ class RecordingEngine {
 
   private isDynamicId(id: string): boolean {
     if (!id || typeof id !== 'string') return false;
-    if (/^(radix|headlessui|mui|jss|ng|ember|__BuiOuter|react-select-|dp-)/i.test(id)) {
+    // BUG-NEW-8 fix: Added chakra-/mantine- for Chakra UI and Mantine hash-style IDs
+    if (/^(radix|headlessui|mui|jss|ng|ember|__BuiOuter|react-select-|dp-|chakra-|mantine-)/i.test(id)) {
       return true;
     }
     if (/:/.test(id)) {
@@ -563,6 +655,24 @@ class RecordingEngine {
           }
         } catch (e) {
           // ignore invalid querySelector
+        }
+        // BUG-NEW-4 fix: Name not globally unique (e.g. radio groups, repeated form rows).
+        // Fall through to sibling-counting disambiguation.
+        let nameSib = current.previousElementSibling;
+        let nameNth = 1;
+        while (nameSib) {
+          if (nameSib.nodeName.toLowerCase() === current.nodeName.toLowerCase()) {
+            nameNth++;
+          }
+          nameSib = nameSib.previousElementSibling;
+        }
+        const nameCurrNodeName = current.nodeName;
+        const nameHasSameTypeSiblings = current.parentElement
+          ? Array.from(current.parentElement.children)
+              .filter(c => c.nodeName === nameCurrNodeName).length > 1
+          : false;
+        if (nameHasSameTypeSiblings) {
+          selector += `:nth-of-type(${nameNth})`;
         }
       } else {
         let sib = current.previousElementSibling;
