@@ -24,7 +24,7 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 
 <div align="center">
 
-![FormPilot Demo — Record, Map, Execute, Done](docs\demo.gif1)
+![FormPilot Demo — Record, Map, Execute, Done](docs/demo.gif)
 
 _Record a form once → Upload your Excel → Hit Run → Watch it fly through hundreds of rows._
 
