@@ -10,8 +10,8 @@ This document contains the official metadata, descriptions, and feature lists fo
 *   **Subtitle (Short Description - Max 150 chars):** Automatically fill complex, multi-page web forms from Excel spreadsheets. Features Shadow DOM piercing and intelligent CAPTCHA pause/recovery.
 *   **Category:** Productivity
 *   **Supported Languages:** English (United States)
-*   **Privacy Policy URL:** `https://formpilot.io/privacy` (Mapped to local `privacy.md`)
-*   **Support URL:** `https://formpilot.io/support`
+*   **Privacy Policy URL:** `https://github.com/Sachin-Rawal091/FormPilot/blob/main/docs/launch/privacy_policy.md`
+*   **Support URL:** `https://github.com/Sachin-Rawal091/FormPilot/issues`
 
 ---
 
@@ -53,17 +53,36 @@ Whether you are filing tax documents, submitting government clearances, processi
 
 ## 3. Search Keywords (Tags - Max 5)
 
-1.  Form Filler
-2.  Excel Auto-Fill
-3.  Web Automation
-4.  Data Entry
-5.  Web Scraper
+*These 5 keywords are selected for the primary Chrome Web Store submission to maximize visibility for high-intent search queries:*
+
+1.  **Form Filler** (Direct search for filling forms)
+2.  **Excel Auto-Fill** (Targets the unique Excel-driven automation workflow)
+3.  **Web Automation** (Broader category target for general browser task runners)
+4.  **Data Entry** (Targets administrative and repetitive typing workloads)
+5.  **Browser Automation** (High-intent search for RPA and macro-like tools)
+
+### Alternative & Backup Keywords (For SEO, Metadata, and Rotation)
+*Use these alternatives for A/B testing store listings or in website SEO metadata:*
+*   **Auto Form Filler**
+*   **Bulk Form Filler**
+*   **Excel to Web Form**
+*   **RPA Tool** (Robotic Process Automation)
+*   **Data Entry Automation**
+*   **Spreadsheet AutoFill**
+*   **No-Code Automation**
+*   **Form Automator**
+*   **Web Scraper** (Useful if users search for scrapers to do form filling)
 
 ---
 
 ## 4. Promo Tiles & Screenshots Plan
 
-*   **Screenshot 1 (The Dashboard):** Clean React-based HomeScreen showing the list of active recordings, the "Record New Flow" CTA, and a drag-and-drop zone for Excel uploads.
-*   **Screenshot 2 (Excel Column Mapping):** DataScreen interface showing a list of Excel columns matched via Levenshtein fuzzy distance to form fields, with color-coded confidence badges.
-*   **Screenshot 3 (Active Run Progress):** RunScreen displaying active progression radial indicators, rows succeeded/skipped counters, and live-scrolling execution logs.
-*   **Screenshot 4 (CAPTCHA Recovery Overlay):** Clear rendering of the beautiful glassmorphic modal overlay appearing on-page when a CAPTCHA is detected, prompting manual solver steps.
+*Note: Upload these image assets directly in the **Chrome Web Store Developer Console** under the Store Listing tab. The screenshots listed below have been freshly generated from the latest built extension, capturing the redesigned UI/UX dashboard pages (1280x800 resolution) located in the local [live_demo_screenshots/](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots) folder.*
+
+*   **Screenshot 1 (The Dashboard):** Clean React-based HomeScreen showing the list of active recordings, the "Record New Flow" CTA, and a drag-and-drop zone for Excel uploads. *(Recommended source: [01_dashboard_home.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/01_dashboard_home.png))*
+*   **Screenshot 2 (Excel Column Mapping):** DataScreen interface showing a list of Excel columns matched via Levenshtein fuzzy distance to form fields, with color-coded confidence badges. *(Recommended source: [02_excel_mapping.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/02_excel_mapping.png))*
+*   **Screenshot 3 (Active Run Progress):** RunScreen displaying active progression radial indicators, rows succeeded/skipped counters, and live-scrolling execution logs. *(Recommended source: [03_run_progress.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/03_run_progress.png))*
+*   **Screenshot 4 (Activity Logs):** LogScreen displaying the split-pane session view, status indicators, and detailed log records. *(Recommended source: [04_activity_logs.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/04_activity_logs.png))*
+*   **Screenshot 5 (Settings Page):** SettingsScreen showcasing the balanced, responsive card layouts and diagnostics logs configuration. *(Recommended source: [05_settings_page.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/05_settings_page.png))*
+
+

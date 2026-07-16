@@ -46,6 +46,14 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
     cleanupStoreListener: null,
 
     initStore: async () => {
+      // Expose to window for testing/debugging
+      if (typeof window !== 'undefined') {
+        (window as any).store = {
+          getState: () => get(),
+          setState: (newState: any) => set(newState)
+        };
+      }
+
       // 1. Load basic recordings from DB
       await get().loadRecordings();
 

@@ -51,4 +51,4 @@ FormPilot requests the following permissions to operate on your behalf:
 
 ## 5. Contact Information
 
-If you have any questions regarding FormPilot's local-first architecture or privacy policies, please contact Sachin Rawal at `sachin.rawal.files@gmail.com` or open an issue on the project home repository.
+If you have any questions regarding FormPilot's local-first architecture or privacy policies, please contact Sachin Rawal at `sachinrawal473@gmail.com` or open an issue on the project home repository.
