@@ -21,21 +21,13 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 
 ## 🎬 See it in action
 
-### 1. Saved Automation Workflows
-FormPilot manages your recorded sequences in a clean dashboard. You can trigger, edit, or delete executions directly from the popup interface.
-![Saved Workflows](live_demo_screenshots/10_popup_saved_flows.png)
+<div align="center">
 
-### 2. Column Mapping Interface
-Upload any Excel data sheet (`.xlsx`, `.xls`, `.csv`) and map spreadsheet columns to your form fields in seconds.
-![Spreadsheet Column Mapping](live_demo_screenshots/12_popup_data_mapped.png)
+![FormPilot Demo — Record, Map, Execute, Done](docs/demo.gif)
 
-### 3. Live Auto-Fill Execution
-Watch FormPilot drive the Chrome tab automatically, filling out multi-page structures with smart date-pickers, radio groups, text inputs, and validation checks.
-![Live Form Fill in Progress](live_demo_screenshots/07_portal_row03_t32s.png)
+*Record a form once → Upload your Excel → Hit Run → Watch it fly through hundreds of rows.*
 
-### 4. Resilient Completion Logs
-Upon completion, review detailed reports, duration metrics, skipped rows, and self-healed step executions.
-![Execution Success Status](live_demo_screenshots/70_FINAL_popup_state.png)
+</div>
 
 ---
 
@@ -59,13 +51,13 @@ FormPilot isn't one script — it's a set of purpose-built subsystems that each 
 
 | Engine | What it solves |
 |---|---|
-| 🎯 **Selector Engine** | Multi-layer fallback selector strategy, so a single DOM tweak on the target site doesn't break the whole flow |
+| 🎯 **Selector Engine** | 8-strategy fallback selector pipeline with Shadow DOM piercing, so a single DOM tweak on the target site doesn't break the whole flow |
 | ⏱ **Smart Wait Engine** | Waits on DOM readiness, network idle, and `MutationObserver` signals instead of hardcoded `sleep()` calls |
 | ⚙️ **Execution Engine** | A step-based state machine that drives the replay, one deterministic step at a time |
 | 🔁 **Retry & Self-Heal System** | Detects failed steps and retries with adjusted strategy before giving up |
 | 💾 **State Manager** | Persists execution progress so multi-page "Save & Continue" flows can pause, resume, or survive a browser restart |
 | 📡 **Response Detection Engine** | Understands what the page did after an action — success, validation error, navigation, or silent failure |
-| 🗓 **DatePicker Engine** | Adapter-based registry (`RmdpAdapter`, generic fallback, more pluggable in) for handling non-native date widgets |
+| 🗓 **DatePicker Engine** | Adapter-based registry (`RmdpAdapter`, `MuiAdapter`, `AntDAdapter`, generic fallback) for handling non-native date widgets |
 | 📝 **Logging System** | Structured, queryable logs of every step, retry, and decision — built for debugging production runs, not just demos |
 
 Each engine is isolated behind a clear interface, so adding support for a new date-picker library or a new wait condition doesn't mean touching the rest of the system.
@@ -116,7 +108,6 @@ flowchart TD
 **Key architectural decisions:**
 
 - **Content script owns execution, not the service worker.** MV3 service workers are ephemeral and can't reliably run long automation loops — so once a run starts, the content script drives it and reports state back.
-- **No `activeTab` permission.** This is unattended, multi-page automation — the extension needs to act on tabs the user isn't necessarily focused on, so `activeTab` is architecturally incompatible with the product.
 - **No hardcoded delays.** Every wait is a condition (DOM mutation, network settle, element visibility) resolved by the Smart Wait Engine, not a `setTimeout` guess.
 - **Adapter pattern for third-party widgets.** Rather than special-casing every date picker library in the execution engine, `DatePickerAdapter` implementations are registered and resolved per-field.
 
@@ -198,11 +189,11 @@ FormPilot is under active development, tracked against an internal production-re
 - [x] Core execution pipeline (Selector, Wait, Execution, Retry, State, Response, Logging engines)
 - [x] DatePicker adapter architecture with pluggable registry
 - [x] Multi-page "Save & Continue" resumable flows
+- [x] MUI & Ant Design date-picker adapters
+- [x] AES-GCM encryption at rest for stored spreadsheet data and files
+- [x] Confirmation dialog for destructive spreadsheet actions
 ## Future Development
-- [ ] Additional widget adapters (MUI, Ant Design date/select components)
-- [ ] Encryption at rest for stored recordings and run data
-- [ ] Session store retention policy
-- [ ] Confirmation dialog for destructive spreadsheet actions
+- [ ] Site Whitelist mode for domain-restricted execution
 - [ ] Dashboard UI/UX refresh
 
 Contributions toward any of these are very welcome — see below.
