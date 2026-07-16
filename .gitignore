@@ -147,5 +147,6 @@ media/
 *.jpg
 *.jpeg
 *.gif
+!docs/demo.gif
 *.mp4
 *.webp
