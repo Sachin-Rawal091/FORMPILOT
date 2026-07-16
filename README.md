@@ -13,6 +13,7 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 <!-- Replace with your actual repo path -->
+
 `Sachin-Rawal091/formpilot`
 
 </div>
@@ -23,9 +24,9 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 
 <div align="center">
 
-![FormPilot Demo — Record, Map, Execute, Done](docs/demo.gif)
+![FormPilot Demo — Record, Map, Execute, Done](docs\demo.gif1)
 
-*Record a form once → Upload your Excel → Hit Run → Watch it fly through hundreds of rows.*
+_Record a form once → Upload your Excel → Hit Run → Watch it fly through hundreds of rows._
 
 </div>
 
@@ -49,16 +50,16 @@ It's designed to survive the things that break naive automation: elements that m
 
 FormPilot isn't one script — it's a set of purpose-built subsystems that each own one hard problem:
 
-| Engine | What it solves |
-|---|---|
-| 🎯 **Selector Engine** | 8-strategy fallback selector pipeline with Shadow DOM piercing, so a single DOM tweak on the target site doesn't break the whole flow |
-| ⏱ **Smart Wait Engine** | Waits on DOM readiness, network idle, and `MutationObserver` signals instead of hardcoded `sleep()` calls |
-| ⚙️ **Execution Engine** | A step-based state machine that drives the replay, one deterministic step at a time |
-| 🔁 **Retry & Self-Heal System** | Detects failed steps and retries with adjusted strategy before giving up |
-| 💾 **State Manager** | Persists execution progress so multi-page "Save & Continue" flows can pause, resume, or survive a browser restart |
-| 📡 **Response Detection Engine** | Understands what the page did after an action — success, validation error, navigation, or silent failure |
-| 🗓 **DatePicker Engine** | Adapter-based registry (`RmdpAdapter`, `MuiAdapter`, `AntDAdapter`, generic fallback) for handling non-native date widgets |
-| 📝 **Logging System** | Structured, queryable logs of every step, retry, and decision — built for debugging production runs, not just demos |
+| Engine                           | What it solves                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎯 **Selector Engine**           | 8-strategy fallback selector pipeline with Shadow DOM piercing, so a single DOM tweak on the target site doesn't break the whole flow |
+| ⏱ **Smart Wait Engine**          | Waits on DOM readiness, network idle, and `MutationObserver` signals instead of hardcoded `sleep()` calls                             |
+| ⚙️ **Execution Engine**          | A step-based state machine that drives the replay, one deterministic step at a time                                                   |
+| 🔁 **Retry & Self-Heal System**  | Detects failed steps and retries with adjusted strategy before giving up                                                              |
+| 💾 **State Manager**             | Persists execution progress so multi-page "Save & Continue" flows can pause, resume, or survive a browser restart                     |
+| 📡 **Response Detection Engine** | Understands what the page did after an action — success, validation error, navigation, or silent failure                              |
+| 🗓 **DatePicker Engine**         | Adapter-based registry (`RmdpAdapter`, `MuiAdapter`, `AntDAdapter`, generic fallback) for handling non-native date widgets            |
+| 📝 **Logging System**            | Structured, queryable logs of every step, retry, and decision — built for debugging production runs, not just demos                   |
 
 Each engine is isolated behind a clear interface, so adding support for a new date-picker library or a new wait condition doesn't mean touching the rest of the system.
 
@@ -127,6 +128,7 @@ flowchart TD
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
 - npm or pnpm
 - Google Chrome (or any Chromium-based browser)
@@ -192,7 +194,9 @@ FormPilot is under active development, tracked against an internal production-re
 - [x] MUI & Ant Design date-picker adapters
 - [x] AES-GCM encryption at rest for stored spreadsheet data and files
 - [x] Confirmation dialog for destructive spreadsheet actions
+
 ## Future Development
+
 - [ ] Site Whitelist mode for domain-restricted execution
 - [ ] Dashboard UI/UX refresh
 
