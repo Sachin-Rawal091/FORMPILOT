@@ -16,6 +16,13 @@ if (fs.existsSync(zipPath)) {
   console.log('Removed old zip.');
 }
 
+// BUG-AUDIT-10 fix: Delete stray uncompiled popup.html from dist root
+const strayPopup = path.join(distDir, 'popup.html');
+if (fs.existsSync(strayPopup)) {
+  fs.unlinkSync(strayPopup);
+  console.log('Removed stray uncompiled dist/popup.html');
+}
+
 // Use PowerShell to create the zip
 execSync(
   `powershell -NoProfile -Command "Compress-Archive -Path '${distDir}\\*' -DestinationPath '${zipPath}' -Force"`,

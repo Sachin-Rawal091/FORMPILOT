@@ -404,9 +404,10 @@ export class Executor {
       // Load chunk if needed
       const neededChunkOffset = Math.floor(rowIdx / EXCEL_CHUNK_SIZE) * EXCEL_CHUNK_SIZE;
       if (currentChunkOffset !== neededChunkOffset) {
+        const afterRowIndex = neededChunkOffset > 0 ? neededChunkOffset - 1 : undefined;
         const chunkRes = await this.safeSendMessage({
           type: MessageType.GET_EXCEL_DATA,
-          payload: { offset: neededChunkOffset, limit: EXCEL_CHUNK_SIZE },
+          payload: { afterRowIndex, limit: EXCEL_CHUNK_SIZE },
           sessionId: this.sessionId,
           timestamp: Date.now()
         }, 5000);

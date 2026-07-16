@@ -1,8 +1,19 @@
 import { StateCreator } from 'zustand';
-import { ExecutionState, LogEntry, ExcelRow, RowStatus, ExecutionStatus, FormPilotMessage, MessageType } from '../../../types';
+import { ExecutionState, LogEntry, ExcelRow, RowStatus, ExecutionStatus, FormPilotMessage, MessageType, Action, StepResult } from '../../../types';
 import { StorageManager } from '../../../storage/StorageManager';
 import { EXCEL_CHUNK_SIZE } from '../../../shared/constants';
 import { logger } from '../../../utils/logger';
+
+// BUG-AUDIT-05: Module-level variables to track execution confirmation transit timeouts
+let confirmationTimeout: ReturnType<typeof setTimeout> | null = null;
+
+export function clearConfirmationTimeout() {
+  if (confirmationTimeout) {
+    clearTimeout(confirmationTimeout);
+    confirmationTimeout = null;
+    logger.debug('ExecutionSlice', 'Execution confirmation timeout cleared.');
+  }
+}
 
 export interface ExecutionSlice {
   executionState: ExecutionState | null;
@@ -163,7 +174,8 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
     let initialFailed = 0;
     const totalExcelRows = await StorageManager.getExcelDataCount();
     for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
-      const chunk = await StorageManager.getExcelData(offset, EXCEL_CHUNK_SIZE);
+      const afterRowIndex = offset > 0 ? offset - 1 : undefined;
+      const chunk = await StorageManager.getExcelData(afterRowIndex, EXCEL_CHUNK_SIZE);
       chunk.forEach((row: ExcelRow) => {
         if (row.status === RowStatus.SUCCESS) initialCompleted++;
         else if (row.status === RowStatus.SKIPPED) initialSkipped++;
@@ -177,7 +189,7 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
       currentRowIndex: 0,
       currentStepIndex: 0,
       currentPageId: "",
-      status: ExecutionStatus.RUNNING,
+      status: ExecutionStatus.STARTING,
       totalRows: totalExcelRows,
       completedRows: initialCompleted,
       failedRows: initialFailed,
@@ -229,6 +241,42 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
         logger.error('ExecutionSlice', 'Failed to send START_EXECUTION message:', err);
         throw new Error("Failed to communicate with service worker. Make sure extension is reloaded.");
       });
+
+      // BUG-AUDIT-05: Start 5s timeout to treat as failed if no confirmation is received
+      clearConfirmationTimeout();
+      confirmationTimeout = setTimeout(async () => {
+        const currentExecState = get().executionState;
+        if (currentExecState && currentExecState.status === ExecutionStatus.STARTING) {
+          logger.error('ExecutionSlice', 'No EXECUTION_CONFIRMED or STATE_UPDATE received within 5s — treating as failed.');
+          const failedState = {
+            ...currentExecState,
+            status: ExecutionStatus.FAILED,
+            mutexLock: null
+          };
+          await StorageManager.setExecutionState(failedState).catch(() => {});
+          set({ executionState: failedState });
+          
+          try {
+            await StorageManager.addLogEntry({
+              id: crypto.randomUUID(),
+              sessionId: currentExecState.sessionId,
+              rowIndex: currentExecState.currentRowIndex,
+              stepId: "SYSTEM",
+              action: Action.WAIT,
+              selector: "content-script",
+              result: StepResult.FAILED,
+              status: "FAILED",
+              error: "No response from the automation tab. It may have closed, crashed, or been on a restricted page (chrome://, Web Store) — please try again.",
+              retryCount: 0,
+              duration: 0,
+              timestamp: Date.now()
+            });
+            await get().loadLogs(currentExecState.sessionId);
+          } catch (e) {
+            logger.error('ExecutionSlice', 'Failed to save fallback failure log:', e);
+          }
+        }
+      }, 5000);
 
       logger.info('ExecutionSlice', 'startExecution() completed successfully.', { sessionId, targetTabId });
     } catch (err: any) {

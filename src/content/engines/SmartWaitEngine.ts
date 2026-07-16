@@ -309,7 +309,11 @@ export class SmartWaitEngine {
     return new Promise((resolve) => {
       // Listen for network idle messages from the injected script
       const listener = (event: MessageEvent) => {
+        // BUG-AUDIT-09 fix: validate both source AND origin to prevent forged
+        // FORMPILOT_NETWORK_IDLE messages from cross-origin scripts in the page.
         if (event.source !== window || !event.data) return;
+        const expectedOrigin = window.location.origin === "null" ? "*" : window.location.origin;
+        if (expectedOrigin !== "*" && event.origin !== expectedOrigin) return;
         if (event.data.type === "FORMPILOT_NETWORK_IDLE") {
           clearTimeout(ceilingTimer);
           window.removeEventListener("message", listener);

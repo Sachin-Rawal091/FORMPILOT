@@ -43,7 +43,7 @@ describe('DataHandler Unit Tests', () => {
     const msg = {
       type: MessageType.GET_EXCEL_DATA,
       sessionId: 'sess-1',
-      payload: { offset: 0, limit: 5 },
+      payload: { afterRowIndex: 0, limit: 5 },
       timestamp: Date.now()
     };
 

@@ -37,7 +37,8 @@ export class StateManager {
       try {
         const totalExcelRows = await StorageManager.getExcelDataCount();
         for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
-          const excelRows = await StorageManager.getExcelData(offset, EXCEL_CHUNK_SIZE);
+          const afterRowIndex = offset > 0 ? offset - 1 : undefined;
+          const excelRows = await StorageManager.getExcelData(afterRowIndex, EXCEL_CHUNK_SIZE);
           excelRows.forEach(row => {
             if (row.status === RowStatus.SUCCESS) initialCompleted++;
             else if (row.status === RowStatus.SKIPPED) initialSkipped++;

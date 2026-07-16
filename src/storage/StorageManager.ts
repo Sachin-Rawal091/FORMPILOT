@@ -14,6 +14,7 @@ import {
 import { sendToBackground } from '../shared/messages';
 import { sanitizeLogText } from '../utils/sanitize';
 import { logger } from '../utils/logger';
+import { encryptValue, decryptValue, encryptBuffer, decryptBuffer } from '../utils/crypto';
 
 export function isContentScript(): boolean {
   return typeof window !== 'undefined' && typeof chrome !== 'undefined' && chrome.runtime && !chrome.tabs;
@@ -123,11 +124,11 @@ class StorageManagerImpl {
     await tx.done;
   }
 
-  async getExcelData(offset?: number, limit?: number): Promise<ExcelRow[]> {
+  async getExcelData(afterRowIndex?: number, limit?: number): Promise<ExcelRow[]> {
     if (isContentScript()) {
       const response = await sendToBackground({
         type: MessageType.GET_EXCEL_DATA,
-        payload: { offset, limit },
+        payload: { afterRowIndex, limit },
         sessionId: "",
         timestamp: Date.now()
       });
@@ -137,22 +138,42 @@ class StorageManagerImpl {
     const tx = db.transaction('excelData', 'readonly');
     const store = tx.objectStore('excelData');
     
-    if (offset !== undefined && limit !== undefined) {
-      const rows: ExcelRow[] = [];
-      let cursor = await store.openCursor();
-      let skipped = 0;
-      while (cursor && skipped < offset) {
-        skipped++;
+    let encryptedRows: any[] = [];
+    if (limit !== undefined) {
+      const range = afterRowIndex !== undefined ? IDBKeyRange.lowerBound(afterRowIndex, true) : null;
+      let cursor = await store.openCursor(range);
+      
+      while (cursor && encryptedRows.length < limit) {
+        encryptedRows.push(cursor.value);
         cursor = await cursor.continue();
       }
-      while (cursor && rows.length < limit) {
-        rows.push(cursor.value);
-        cursor = await cursor.continue();
-      }
-      return rows;
+    } else {
+      encryptedRows = await store.getAll();
     }
-    
-    return store.getAll();
+
+    const decryptedRows: ExcelRow[] = [];
+    for (const row of encryptedRows) {
+      if (row.encryptedBlob) {
+        try {
+          const decrypted = await decryptValue(row.encryptedBlob);
+          decryptedRows.push({
+            rowIndex: row.rowIndex,
+            data: decrypted.data,
+            status: decrypted.status,
+            isValid: decrypted.isValid,
+            validationErrors: decrypted.validationErrors,
+            error: decrypted.error
+          });
+        } catch (err) {
+          logger.error('StorageManager', `Failed to decrypt excel row ${row.rowIndex}:`, err);
+          throw err;
+        }
+      } else {
+        // Fallback for unencrypted legacy rows
+        decryptedRows.push(row);
+      }
+    }
+    return decryptedRows;
   }
 
   async getExcelDataCount(): Promise<number> {
@@ -169,7 +190,17 @@ class StorageManagerImpl {
       await tx.objectStore('excelData').clear();
     }
     for (const row of rows) {
-      tx.objectStore('excelData').put(row);
+      const encryptedBlob = await encryptValue({
+        data: row.data,
+        status: row.status,
+        isValid: row.isValid,
+        validationErrors: row.validationErrors,
+        error: row.error
+      });
+      await tx.objectStore('excelData').put({
+        rowIndex: row.rowIndex,
+        encryptedBlob
+      });
     }
     await tx.done;
   }
@@ -280,6 +311,29 @@ class StorageManagerImpl {
     }
     const db = await getDB();
     await db.put('sessions', meta);
+    this.cleanupSessions().catch(err => logger.error('StorageManager', 'Session cleanup failed:', err));
+  }
+
+  async cleanupSessions(): Promise<void> {
+    if (isContentScript()) {
+      return;
+    }
+    const settings = await this.getUserSettings();
+    const retentionDays = settings?.logRetentionDays ?? LOG_RETENTION_DAYS;
+    const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+    const db = await getDB();
+    const tx = db.transaction('sessions', 'readwrite');
+    const index = tx.store.index('timestamp');
+    let cursor = await index.openCursor();
+    while (cursor) {
+      if (cursor.value.timestamp < cutoffTime) {
+        await cursor.delete();
+        cursor = await cursor.continue();
+      } else {
+        break;
+      }
+    }
+    await tx.done;
   }
 
   async getSessionMetas(): Promise<SessionMeta[]> {
@@ -307,7 +361,44 @@ class StorageManagerImpl {
       return response ? (response as any).fileBlob : undefined;
     }
     const db = await getDB();
-    return db.get('files', alias);
+    const encryptedRecord = await db.get('files', alias);
+    if (!encryptedRecord) return undefined;
+
+    try {
+      const decryptedMeta = await decryptValue(encryptedRecord.encryptedMeta);
+      const decryptedBuffer = await decryptBuffer(encryptedRecord.encryptedData);
+      const blob = new Blob([decryptedBuffer], { type: decryptedMeta.type });
+      return {
+        alias: encryptedRecord.alias,
+        data: blob,
+        name: decryptedMeta.name,
+        type: decryptedMeta.type
+      };
+    } catch (err) {
+      logger.error('StorageManager', `Failed to decrypt file blob for alias ${alias}:`, err);
+      throw err;
+    }
+  }
+
+  async addFileBlob(fileBlob: FileBlob): Promise<void> {
+    if (isContentScript()) {
+      return;
+    }
+    const db = await getDB();
+    
+    // Encrypt the blob data and metadata
+    const arrayBuffer = await fileBlob.data.arrayBuffer();
+    const encryptedData = await encryptBuffer(arrayBuffer);
+    const encryptedMeta = await encryptValue({
+      name: fileBlob.name,
+      type: fileBlob.type
+    });
+
+    await db.put('files', {
+      alias: fileBlob.alias,
+      encryptedData,
+      encryptedMeta
+    });
   }
 
   async getHistoricLogs(offset = 0, limit = 500): Promise<LogEntry[]> {

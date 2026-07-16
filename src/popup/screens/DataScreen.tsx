@@ -19,6 +19,7 @@ export const DataScreen: React.FC = () => {
   const [isDragActive, setIsDragActive] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>('form_data.xlsx');
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -364,9 +365,7 @@ export const DataScreen: React.FC = () => {
               <div className="flex flex-col gap-3 pt-4 border-t border-slate-200 dark:border-slate-800/60">
                 <div className="flex gap-3">
                   <button
-                    onClick={() => {
-                      useFormPilotStore.setState({ excelData: [], excelRowCount: 0, excelHeaders: [], fuzzyMapping: {} });
-                    }}
+                    onClick={() => setShowClearConfirm(true)}
                     className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-full active:scale-95 transition"
                   >
                     Clear Spreadsheet
@@ -390,6 +389,49 @@ export const DataScreen: React.FC = () => {
         </div>
 
       </div>
+
+      {/* BUG-AUDIT-01: Clear Spreadsheet Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm border border-slate-200 dark:border-slate-800/80 rounded-2xl bg-white dark:bg-[#121214] p-6 space-y-6 shadow-2xl animate-fade-in text-slate-950 dark:text-slate-100">
+            
+            <div className="flex gap-4 items-start text-left">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 dark:bg-amber-500/5 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0 border border-amber-500/20">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-semibold font-outfit text-slate-900 dark:text-white leading-none">
+                  Clear Spreadsheet
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Clear all <strong className="text-slate-750 dark:text-slate-200 font-semibold">{excelRowCount}</strong> uploaded rows and column mappings? This cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl active:scale-95 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  useFormPilotStore.setState({ excelData: [], excelRowCount: 0, excelHeaders: [], fuzzyMapping: {} });
+                  setShowClearConfirm(false);
+                }}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-amber-600/10 active:scale-95 transition-all duration-200"
+              >
+                Clear Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

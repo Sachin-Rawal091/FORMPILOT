@@ -8,6 +8,13 @@ interface StatusBadgeProps {
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const getBadgeStyles = () => {
     switch (status) {
+      case ExecutionStatus.STARTING:
+        return {
+          bg: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
+          label: 'STARTING...',
+          pulse: true,
+          pulseColor: 'bg-indigo-400'
+        };
       case ExecutionStatus.RUNNING:
         return {
           bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',

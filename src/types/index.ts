@@ -95,12 +95,13 @@ export interface ExecutionState {
 }
 
 export enum ExecutionStatus {
-  IDLE,
-  RUNNING,
-  PAUSED,
-  CAPTCHA_PAUSED,
-  COMPLETE,
-  FAILED,
+  IDLE = 0,
+  RUNNING = 1,
+  PAUSED = 2,
+  CAPTCHA_PAUSED = 3,
+  COMPLETE = 4,
+  FAILED = 5,
+  STARTING = 6,
 }
 
 export interface PageDef {
@@ -204,8 +205,9 @@ export enum MessageType {
   GET_EXECUTION_STATE,
   CLEAR_BADGE,
   GET_FILE_BLOB,
-  ADD_SESSION_META,
   GET_SESSION_METAS,
+  EXECUTION_CONFIRMED,
+  ADD_SESSION_META,
 }
 
 export interface RecordingState {

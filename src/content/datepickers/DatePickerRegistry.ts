@@ -1,6 +1,8 @@
 import { DatePickerAdapter } from "./DatePickerAdapter";
 import { GenericDatePickerAdapter } from "./adapters/GenericDatePickerAdapter";
 import { RmdpAdapter } from "./adapters/RmdpAdapter";
+import { MuiAdapter } from "./adapters/MuiAdapter";
+import { AntDAdapter } from "./adapters/AntDAdapter";
 
 /**
  * Registry to manage and detect DatePicker adapters.
@@ -40,4 +42,6 @@ export class DatePickerRegistry {
 
 // Register standard adapters on module load (order matters: custom adapters first, generic fallback last)
 DatePickerRegistry.register(new RmdpAdapter());
+DatePickerRegistry.register(new MuiAdapter());
+DatePickerRegistry.register(new AntDAdapter());
 DatePickerRegistry.register(new GenericDatePickerAdapter());

@@ -3,6 +3,8 @@ import { DatePickerEngine } from "../src/content/datepickers/DatePickerEngine";
 import { DatePickerRegistry } from "../src/content/datepickers/DatePickerRegistry";
 import { RmdpAdapter } from "../src/content/datepickers/adapters/RmdpAdapter";
 import { GenericDatePickerAdapter } from "../src/content/datepickers/adapters/GenericDatePickerAdapter";
+import { MuiAdapter } from "../src/content/datepickers/adapters/MuiAdapter";
+import { AntDAdapter } from "../src/content/datepickers/adapters/AntDAdapter";
 
 function makeVisible(el: HTMLElement, width = 120, height = 40) {
   Object.defineProperty(el, "offsetWidth", { value: width, configurable: true });
@@ -48,6 +50,24 @@ describe("DatePickerEngine and Adapters", () => {
       const adapter = DatePickerRegistry.detect(input);
       expect(adapter).toBeInstanceOf(GenericDatePickerAdapter);
       expect(adapter?.name).toBe("GenericDatePickerAdapter");
+    });
+
+    it("should detect MuiAdapter for MUI elements", () => {
+      const input = document.createElement("input");
+      input.className = "MuiInputBase-input";
+
+      const adapter = DatePickerRegistry.detect(input);
+      expect(adapter).toBeInstanceOf(MuiAdapter);
+      expect(adapter?.name).toBe("MuiAdapter");
+    });
+
+    it("should detect AntDAdapter for AntD elements", () => {
+      const input = document.createElement("input");
+      input.className = "ant-picker-input";
+
+      const adapter = DatePickerRegistry.detect(input);
+      expect(adapter).toBeInstanceOf(AntDAdapter);
+      expect(adapter?.name).toBe("AntDAdapter");
     });
 
     it("should return null for non-date elements", () => {
@@ -445,6 +465,137 @@ describe("DatePickerEngine and Adapters", () => {
       found = adapter["findWrapper"]();
       expect(found).toBe(w2);
       expect(adapter["activeWrapper"]).toBe(w2);
+    });
+  });
+
+  describe("MuiAdapter E2E Calendar Fill Flow", () => {
+    it("should successfully open, navigate, select, and verify MUI", async () => {
+      const input = document.createElement("input");
+      input.className = "MuiInputBase-input";
+      document.body.appendChild(input);
+
+      // Start fill flow
+      const fillPromise = DatePickerEngine.fill(input, "2026/10/15");
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Create MUI popup elements
+      const popup = document.createElement("div");
+      popup.className = "MuiPickersPopper-root";
+      makeVisible(popup, 320, 280);
+
+      const header = document.createElement("div");
+      header.className = "MuiPickersCalendarHeader-label";
+      header.textContent = "July 2026";
+      popup.appendChild(header);
+
+      const prevBtn = document.createElement("button");
+      prevBtn.className = "MuiPickersArrowSwitcher-button";
+      const nextBtn = document.createElement("button");
+      nextBtn.className = "MuiPickersArrowSwitcher-button";
+      popup.appendChild(prevBtn); // prev
+      popup.appendChild(nextBtn); // next
+
+      // Create day cells
+      let dayClicked = false;
+      for (let i = 1; i <= 31; i++) {
+        const cell = document.createElement("button");
+        cell.className = "MuiPickersDay-root";
+        cell.textContent = String(i);
+        makeVisible(cell, 32, 32);
+        if (i === 15) {
+          cell.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026/10/15";
+          });
+        }
+        popup.appendChild(cell);
+      }
+
+      // Mock navigation
+      let clickCount = 0;
+      nextBtn.addEventListener("click", () => {
+        clickCount++;
+        if (clickCount === 1) header.textContent = "August 2026";
+        else if (clickCount === 2) header.textContent = "September 2026";
+        else if (clickCount === 3) header.textContent = "October 2026";
+      });
+
+      document.body.appendChild(popup);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026/10/15");
+    });
+  });
+
+  describe("AntDAdapter E2E Calendar Fill Flow", () => {
+    it("should successfully open, navigate, select, and verify AntD", async () => {
+      const container = document.createElement("div");
+      container.className = "ant-picker";
+      const input = document.createElement("input");
+      input.className = "ant-picker-input";
+      container.appendChild(input);
+      document.body.appendChild(container);
+
+      // Start fill flow
+      const fillPromise = DatePickerEngine.fill(input, "2026/10/15");
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Create AntD popup elements
+      const popup = document.createElement("div");
+      popup.className = "ant-picker-dropdown";
+      makeVisible(popup, 320, 280);
+
+      const header = document.createElement("div");
+      header.className = "ant-picker-header-view";
+      header.textContent = "July 2026";
+      popup.appendChild(header);
+
+      const nextBtn = document.createElement("button");
+      nextBtn.className = "ant-picker-header-next-btn";
+      popup.appendChild(nextBtn);
+
+      // Create day cells
+      let dayClicked = false;
+      for (let i = 1; i <= 31; i++) {
+        const cell = document.createElement("div");
+        cell.className = "ant-picker-cell ant-picker-cell-in-view";
+        const inner = document.createElement("div");
+        inner.className = "ant-picker-cell-inner";
+        inner.textContent = String(i);
+        cell.appendChild(inner);
+        makeVisible(cell, 32, 32);
+        if (i === 15) {
+          inner.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026/10/15";
+          });
+        }
+        popup.appendChild(cell);
+      }
+
+      // Mock navigation
+      let clickCount = 0;
+      nextBtn.addEventListener("click", () => {
+        clickCount++;
+        if (clickCount === 1) header.textContent = "August 2026";
+        else if (clickCount === 2) header.textContent = "September 2026";
+        else if (clickCount === 3) header.textContent = "October 2026";
+      });
+
+      document.body.appendChild(popup);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026/10/15");
     });
   });
 });

@@ -20,6 +20,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       logger.error('ServiceWorker', 'Failed to run periodic log cleanup:', err);
     }
 
+    // 1b. Session cleanup
+    try {
+      await StorageManager.cleanupSessions();
+    } catch (err) {
+      logger.error('ServiceWorker', 'Failed to run periodic session cleanup:', err);
+    }
+
     // 2. Reclaim stale mutex
     try {
       const state = await StorageManager.getExecutionState();
@@ -314,6 +321,11 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 });
 
 chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendResponse) => {
+  // BUG-AUDIT-08 fix: Reject messages from other extensions (defense-in-depth).
+  // Chrome scopes onMessage to this extension's own contexts by default, but if
+  // externally_connectable is ever added, this guard prevents foreign messages.
+  if (sender.id && sender.id !== chrome.runtime.id) return;
+
   const tabId = message.tabId || sender.tab?.id;
   if (tabId && !message.tabId) {
     message.tabId = tabId;
@@ -442,10 +454,20 @@ chrome.runtime.onMessage.addListener((message: FormPilotMessage, sender, sendRes
     }
 
     const routeToTab = (targetTabId: number) => {
-      sendMessageWithSelfHeal(targetTabId, message).catch((err) => {
-        logger.warn('ServiceWorker', `Failed to route ${message.type} to tab ${targetTabId} even after self-heal:`, err);
-        handleUnrecoverableRouting(targetTabId, message);
-      });
+      sendMessageWithSelfHeal(targetTabId, message)
+        .then(() => {
+          chrome.runtime.sendMessage({
+            type: MessageType.EXECUTION_CONFIRMED,
+            sessionId: message.sessionId,
+            tabId: targetTabId,
+            timestamp: Date.now(),
+            payload: { messageType: message.type }
+          }).catch(() => {}); // ignore error if listener is not active (e.g. popup closed)
+        })
+        .catch((err) => {
+          logger.warn('ServiceWorker', `Failed to route ${message.type} to tab ${targetTabId} even after self-heal:`, err);
+          handleUnrecoverableRouting(targetTabId, message);
+        });
     };
 
     if (tabId) {

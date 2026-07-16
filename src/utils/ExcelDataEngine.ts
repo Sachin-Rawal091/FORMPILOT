@@ -1,4 +1,3 @@
-import * as XLSX from '@e965/xlsx';
 import { ExcelRow, RowStatus } from '../types';
 import { EXCEL_FUZZY_MAX_DISTANCE, EXCEL_EMPTY_ROW_THRESHOLD } from '../shared/constants';
 import { normalizeCellValue, sanitizeObjectKey } from './sanitize';
@@ -10,6 +9,7 @@ export class ExcelDataEngine {
    * Handles empty row filtering and basic normalization.
    */
   static async parseExcelFile(buffer: ArrayBuffer): Promise<ExcelRow[]> {
+    const XLSX = await import('@e965/xlsx');
     // Parse workbook
     const workbook = XLSX.read(buffer, { type: 'array' });
     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {

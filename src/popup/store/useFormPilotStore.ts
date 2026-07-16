@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createNavSlice, NavSlice, TabType } from './slices/navSlice';
 import { createRecordingSlice, RecordingSlice } from './slices/recordingSlice';
 import { createDataSlice, DataSlice } from './slices/dataSlice';
-import { createExecutionSlice, ExecutionSlice } from './slices/executionSlice';
+import { createExecutionSlice, ExecutionSlice, clearConfirmationTimeout } from './slices/executionSlice';
 import { createSettingsSlice, SettingsSlice } from './slices/settingsSlice';
 
 import { StorageManager } from '../../storage/StorageManager';
@@ -101,7 +101,8 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
           MessageType.STATE_UPDATE,
           MessageType.RECORDING_EVENT,
           MessageType.EXECUTION_COMPLETE,
-          MessageType.CAPTCHA_DETECTED
+          MessageType.CAPTCHA_DETECTED,
+          MessageType.EXECUTION_CONFIRMED
         ];
         
         if (!handledTypes.includes(message.type)) {
@@ -111,7 +112,19 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
         logger.debug('FormPilotStore', `Caught message: ${MessageType[message.type]}`);
         
         switch (message.type) {
+          case MessageType.EXECUTION_CONFIRMED:
+            clearConfirmationTimeout();
+            if (get().executionState && get().executionState?.status === ExecutionStatus.STARTING) {
+              const newState = {
+                ...get().executionState!,
+                status: ExecutionStatus.RUNNING
+              };
+              set({ executionState: newState });
+            }
+            break;
+
           case MessageType.STATE_UPDATE:
+            clearConfirmationTimeout();
             if (message.payload?.state) {
               const newState = message.payload.state as ExecutionState;
               set({ executionState: newState });
@@ -119,7 +132,8 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
               if (
                 newState.status === ExecutionStatus.RUNNING || 
                 newState.status === ExecutionStatus.PAUSED || 
-                newState.status === ExecutionStatus.CAPTCHA_PAUSED
+                newState.status === ExecutionStatus.CAPTCHA_PAUSED ||
+                newState.status === ExecutionStatus.STARTING
               ) {
                 set({ activeTab: 'run' });
               }
@@ -134,7 +148,8 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
             const isExecActive = currentExecState && (
               currentExecState.status === ExecutionStatus.RUNNING ||
               currentExecState.status === ExecutionStatus.PAUSED ||
-              currentExecState.status === ExecutionStatus.CAPTCHA_PAUSED
+              currentExecState.status === ExecutionStatus.CAPTCHA_PAUSED ||
+              currentExecState.status === ExecutionStatus.STARTING
             );
             if (isExecActive) {
               logger.warn('FormPilotStore', 'Ignored RECORDING_EVENT because execution is active.');

@@ -3,14 +3,14 @@ import { StorageManager } from "../../storage/StorageManager";
 
 export class DataHandler {
   static async handleGetExcelData(message: FormPilotMessage, sendResponse: (response: any) => void) {
-    const payload = (message.payload || {}) as { offset?: number; limit?: number; countOnly?: boolean };
+    const payload = (message.payload || {}) as { afterRowIndex?: number; limit?: number; countOnly?: boolean };
     
     if (payload.countOnly) {
       StorageManager.getExcelDataCount()
         .then(count => sendResponse({ count }))
         .catch(err => sendResponse({ error: err.message }));
     } else {
-      StorageManager.getExcelData(payload.offset, payload.limit)
+      StorageManager.getExcelData(payload.afterRowIndex, payload.limit)
         .then(rows => sendResponse({ excelRows: rows || [] }))
         .catch(err => sendResponse({ error: err.message }));
     }
