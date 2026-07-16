@@ -43,7 +43,14 @@ export const createDataSlice: StateCreator<any, [], [], DataSlice> = (set, get) 
       if (selected) {
         const clearedSteps = selected.steps.map((step: Step) => ({
           ...step,
-          columnName: undefined
+          columnName: undefined,
+          // Restore original recorded value: saveMappings stores it in defaultValue
+          // before replacing value with {{ColumnName}}. If defaultValue has the
+          // original, swap it back so auto-fuzzy-matching uses real field text
+          // (e.g. "John Doe") instead of stale "{{First Name}}" template strings.
+          value: (step.value && step.value.startsWith('{{') && step.defaultValue)
+            ? step.defaultValue
+            : step.value
         }));
         updatedRecording = {
           ...selected,
@@ -53,6 +60,16 @@ export const createDataSlice: StateCreator<any, [], [], DataSlice> = (set, get) 
 
       if (updatedRecording && headers.length > 0) {
         updatedRecording.steps.forEach((step: Step) => {
+          // Skip non-data actions — these steps don't read from Excel
+          if (
+            step.action === Action.CLICK ||
+            step.action === Action.SUBMIT ||
+            step.action === Action.NAVIGATE_NEXT ||
+            step.action === Action.SCROLL ||
+            step.action === Action.WAIT
+          ) {
+            return;
+          }
           const targetName = step.selectorMeta?.labelText || step.selectorMeta?.placeholder || step.selectorMeta?.name || step.value || "";
           if (targetName) {
             const cleanTarget = targetName.replace(/[{}]/g, '').trim();

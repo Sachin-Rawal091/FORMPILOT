@@ -21,6 +21,8 @@ To perform its automated form-filling duties, FormPilot accesses:
 
 All data is stored **exclusively** inside your local browser storage:
 *   **IndexedDB (Local Storage):** Recorded automation steps, parsed Excel row data, and color-coded execution logs are saved to IndexedDB inside your sandbox. This database is persistent, unlimited in capacity, and private to the extension.
+    *   *Encryption at Rest:* Sensitive spreadsheet rows and uploaded file blobs are encrypted at rest using AES-GCM 256-bit encryption. The cryptographic key is generated and stored locally in `chrome.storage.local`. 
+    *   *Client-Side Security Limits:* Please note that client-side encryption-at-rest relies on local key storage. While this fully secures your data against casual filesystem inspection, it does not protect against an attacker who has already compromised your local operating system user profile or obtained equivalent administrative access to read your browser's extension storage context.
 *   **`chrome.storage.session` (Volatile Storage):** Active execution progress, active step pointers, page-retry counts, and session mutex locks are saved here. This data is cleared as soon as the execution finishes or when the browser session ends.
 *   **No Cloud Storage:** FormPilot does not use any cloud servers, databases, or third-party storage providers.
 
@@ -42,6 +44,8 @@ FormPilot requests the following permissions to operate on your behalf:
 *   `scripting`: Required to inject DOM helper libraries (such as safe React-input setters) into your active tab.
 *   `notifications`: Required to display desktop notifications when user attention is needed (e.g. when a CAPTCHA is detected).
 *   `tabs`: Required to locate background web pages and perform same-tab URL redirection.
+*   `downloads`: Required to export activity logs as JSON/CSV files directly to your downloads folder.
+*   `alarms`: Required to run periodic local maintenance (clearing old logs per your retention settings, recovering stuck execution locks) while the extension is idle.
 
 ---
 

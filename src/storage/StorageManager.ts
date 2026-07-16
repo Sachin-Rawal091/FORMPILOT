@@ -184,23 +184,31 @@ class StorageManagerImpl {
   }
 
   async setExcelData(rows: ExcelRow[], clearFirst = true): Promise<void> {
+    // Encrypt all rows BEFORE opening the transaction.
+    // IDB transactions auto-close when the event loop has no pending IDB requests.
+    // Awaiting crypto (encryptValue) inside the transaction causes it to finish
+    // before the subsequent .put() calls, resulting in:
+    // "Failed to execute 'objectStore' on 'IDBTransaction': The transaction has finished."
+    const encryptedRows = await Promise.all(
+      rows.map(async (row) => ({
+        rowIndex: row.rowIndex,
+        encryptedBlob: await encryptValue({
+          data: row.data,
+          status: row.status,
+          isValid: row.isValid,
+          validationErrors: row.validationErrors,
+          error: row.error
+        })
+      }))
+    );
+
     const db = await getDB();
     const tx = db.transaction('excelData', 'readwrite');
     if (clearFirst) {
       await tx.objectStore('excelData').clear();
     }
-    for (const row of rows) {
-      const encryptedBlob = await encryptValue({
-        data: row.data,
-        status: row.status,
-        isValid: row.isValid,
-        validationErrors: row.validationErrors,
-        error: row.error
-      });
-      await tx.objectStore('excelData').put({
-        rowIndex: row.rowIndex,
-        encryptedBlob
-      });
+    for (const record of encryptedRows) {
+      tx.objectStore('excelData').put(record);
     }
     await tx.done;
   }

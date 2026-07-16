@@ -36,9 +36,13 @@ export class StateManager {
       // Fallback: no prior state for this session — scan IndexedDB paginated.
       try {
         const totalExcelRows = await StorageManager.getExcelDataCount();
+        let lastRowIndex: number | undefined = undefined;
         for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
-          const afterRowIndex = offset > 0 ? offset - 1 : undefined;
+          const afterRowIndex = offset > 0 ? lastRowIndex : undefined;
           const excelRows = await StorageManager.getExcelData(afterRowIndex, EXCEL_CHUNK_SIZE);
+          if (excelRows.length > 0) {
+            lastRowIndex = excelRows[excelRows.length - 1].rowIndex;
+          }
           excelRows.forEach(row => {
             if (row.status === RowStatus.SUCCESS) initialCompleted++;
             else if (row.status === RowStatus.SKIPPED) initialSkipped++;

@@ -172,15 +172,29 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
     let initialCompleted = 0;
     let initialSkipped = 0;
     let initialFailed = 0;
-    const totalExcelRows = await StorageManager.getExcelDataCount();
-    for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
-      const afterRowIndex = offset > 0 ? offset - 1 : undefined;
-      const chunk = await StorageManager.getExcelData(afterRowIndex, EXCEL_CHUNK_SIZE);
-      chunk.forEach((row: ExcelRow) => {
-        if (row.status === RowStatus.SUCCESS) initialCompleted++;
-        else if (row.status === RowStatus.SKIPPED) initialSkipped++;
-        else if (row.status === RowStatus.FAILED) initialFailed++;
-      });
+    let totalExcelRows = 0;
+    try {
+      totalExcelRows = await StorageManager.getExcelDataCount();
+      let lastRowIndex: number | undefined = undefined;
+      for (let offset = 0; offset < totalExcelRows; offset += EXCEL_CHUNK_SIZE) {
+        // Use actual IDB rowIndex from previous chunk's last row as cursor boundary
+        const afterRowIndex = offset > 0 ? lastRowIndex : undefined;
+        const chunk = await StorageManager.getExcelData(afterRowIndex, EXCEL_CHUNK_SIZE);
+        if (chunk.length > 0) {
+          lastRowIndex = chunk[chunk.length - 1].rowIndex;
+        }
+        chunk.forEach((row: ExcelRow) => {
+          if (row.status === RowStatus.SUCCESS) initialCompleted++;
+          else if (row.status === RowStatus.SKIPPED) initialSkipped++;
+          else if (row.status === RowStatus.FAILED) initialFailed++;
+        });
+      }
+    } catch (err) {
+      // Key is gone/corrupted - wipe unrecoverable data and reset popup state
+      await StorageManager.setExcelData([], true);
+      const store = (await import('../useFormPilotStore')).useFormPilotStore;
+      store.setState({ excelData: [], excelRowCount: 0, excelHeaders: [], fuzzyMapping: {} });
+      throw new Error("Your previous spreadsheet data could not be decrypted and has been cleared. Please re-upload your Excel file.");
     }
 
     // 3. Create the initial execution state

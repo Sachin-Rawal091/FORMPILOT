@@ -2,12 +2,12 @@ import { SelectorMeta, SelectorResult, SelectorStrategy } from "../../types";
 import { SHADOW_TRAVERSAL_LIMIT, MIN_SELECTOR_CONFIDENCE } from "../../shared/constants";
 
 /**
- * 7-layer fallback Selector Engine
+ * 8-strategy fallback Selector Engine
  */
 export class SelectorEngine {
   /**
-   * Tries to find an element using the 7-layer fallback strategy.
-   * Returns the first match that exceeds the confidence threshold, or null if none found.
+   * Tries to find an element using the 8-strategy fallback pipeline.
+   * Returns the best match that exceeds the confidence threshold, or null if none found.
    */
   static findElement(meta: SelectorMeta, selector: string): SelectorResult | null {
     let bestResult: SelectorResult | null = null;

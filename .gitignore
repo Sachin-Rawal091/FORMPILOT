@@ -20,6 +20,7 @@ obj/
 *.zip
 *.tar.gz
 *.tgz
+*.crx
 
 # --- Local Environment & Security Secrets ---
 .env
@@ -27,6 +28,7 @@ obj/
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 *.env.json
 *.pem
 *.key
@@ -46,7 +48,10 @@ obj/
 .settings/
 *.sublime-project
 *.sublime-workspace
+*.code-workspace
 .eslintcache
+.history/
+.prettiercache
 
 # --- Test, Diagnostic & Coverage Reports ---
 coverage/
@@ -61,6 +66,8 @@ tests/debug/
 .vite-cache/
 .parcel-cache/
 .rollup.cache/
+.vitest/
+.vitest-cache/
 vite.config.ts.timestamp-*
 vite.config.js.timestamp-*
 vitest.config.ts.timestamp-*
@@ -95,6 +102,7 @@ agent_temp/
 issue.md
 bug.md
 FormPilot_RecordingEngine_Fix_Plan.md
+*[Pp]lan.md
 
 # --- Local Sandbox & Test Scripts ---
 # Mock portals and local servers used only for offline sandbox testing
@@ -124,6 +132,14 @@ verify_rmdp_automation_live.js
 verify_student_automation_live.js
 create_demo_gif.js
 
+# General wildcards for local portal mockups and test/demo scripts
+*_portal.html
+*_sandbox.html
+verify_*_live.js
+verify_*_automation.js
+generate_*_excel.js
+run_live_demo*.js
+
 
 # --- Agent Protocol Files ---
 # Ignored to prevent agent state churn in project git history
@@ -144,6 +160,7 @@ live_demo_screenshots/
 screenshots/
 media/
 *.png
+!public/icons/*.png
 *.jpg
 *.jpeg
 *.gif

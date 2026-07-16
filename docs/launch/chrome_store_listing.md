@@ -8,7 +8,7 @@ This document contains the official metadata, descriptions, and feature lists fo
 
 *   **Extension Name:** FormPilot — Resilient Automated Form Filler
 *   **Subtitle (Short Description - Max 150 chars):** Automatically fill complex, multi-page web forms from Excel spreadsheets. Features Shadow DOM piercing and intelligent CAPTCHA pause/recovery.
-*   **Category:** Productivity / Developer Tools
+*   **Category:** Productivity
 *   **Supported Languages:** English (United States)
 *   **Privacy Policy URL:** `https://formpilot.io/privacy` (Mapped to local `privacy.md`)
 *   **Support URL:** `https://formpilot.io/support`
@@ -35,7 +35,7 @@ Whether you are filing tax documents, submitting government clearances, processi
 
 ### Core Automation Engines (Built for Real-World Sites)
 
-*   **7-Layer Selector Fallback (with Shadow DOM Piercing):** If a web developer updates an input ID or relocates a field, FormPilot's Selector Engine automatically falls back through 7 alternative matching strategies (including XPath, computed CSS path, ARIA labels, and Associated Text labels). It recursively traverses the Shadow DOM up to 500 elements deep to find and fill elements hidden from generic extensions.
+*   **8-Strategy Selector Fallback (with Shadow DOM Piercing):** If a web developer updates an input ID or relocates a field, FormPilot's Selector Engine automatically falls back through 8 alternative matching strategies (including XPath, computed CSS path, ARIA labels, and Associated Text labels). It recursively traverses the Shadow DOM up to 500 elements deep to find and fill elements hidden from generic extensions.
 *   **Smart Wait Engine (Dynamic DOM & Network Stability):** No more arbitrary sleep timers. FormPilot dynamically checks for layout stability using a MutationObserver, listens for fetch/XHR network idle ceilings, and monitors URL changes with a dual-signal SPA parser (verifying that both the URL has shifted and a significant fraction of body children have updated).
 *   **Smart Auto-Coercion & Variable Resolution:** FormPilot automatically handles 8 distinct missing-value scenarios. It auto-coerces Excel cell values to match form schemas (e.g. converting `"true"` to a boolean, or date strings to native Date objects) and uses configurable defaults when columns are empty.
 *   **Intelligent CAPTCHA Recovery Loop:** When a reCAPTCHA, hCaptcha, or Cloudflare challenge is encountered, FormPilot pauses automation, rings a sound notification, badges the extension icon, alerts the user, and renders a floating glassmorphic overlay. The user solves the CAPTCHA manually, clicks Resume, and FormPilot continues where it left off.

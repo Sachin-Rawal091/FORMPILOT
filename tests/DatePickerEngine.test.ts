@@ -26,6 +26,8 @@ describe("DatePickerEngine and Adapters", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     vi.useFakeTimers();
+    window.innerWidth = 1024;
+    window.innerHeight = 768;
   });
 
   afterEach(() => {
@@ -208,6 +210,300 @@ describe("DatePickerEngine and Adapters", () => {
       expect(success).toBe(true);
       expect(dayClicked).toBe(true);
       expect(input.value).toBe("2026-10-15");
+    });
+
+    it("should prioritize the closer calendar popup over a distant pricing table matching the heuristics", async () => {
+      const input = document.createElement("input");
+      input.className = "datepicker";
+      document.body.appendChild(input);
+
+      // Mock input position
+      input.getBoundingClientRect = () => ({
+        x: 100, y: 100, left: 100, top: 100, right: 200, bottom: 130, width: 100, height: 30
+      } as DOMRect);
+
+      // 1. Create a distant pricing table that matches the ">=20 numbers" calendar heuristics
+      const pricingTable = document.createElement("div");
+      pricingTable.className = "pricing-table-grid"; // matches no common selectors, but matches heuristic
+      pricingTable.style.display = "block";
+      pricingTable.style.visibility = "visible";
+      pricingTable.style.opacity = "1";
+      makeVisible(pricingTable, 300, 300);
+      pricingTable.getBoundingClientRect = () => ({
+        x: 800, y: 100, left: 800, top: 100, right: 1100, bottom: 400, width: 300, height: 300
+      } as DOMRect);
+
+      // Add a header and numbers to satisfy heuristics
+      const tableHeader = document.createElement("div");
+      tableHeader.textContent = "Price List for July 2026";
+      pricingTable.appendChild(tableHeader);
+      const nextBtnTable = document.createElement("button");
+      nextBtnTable.textContent = "Next Page";
+      pricingTable.appendChild(nextBtnTable);
+
+      for (let i = 1; i <= 25; i++) {
+        const cell = document.createElement("span");
+        cell.textContent = String(i);
+        makeVisible(cell, 20, 20);
+        cell.getBoundingClientRect = () => ({
+          x: 800 + (i % 5) * 40,
+          y: 150 + Math.floor(i / 5) * 40,
+          left: 800 + (i % 5) * 40,
+          top: 150 + Math.floor(i / 5) * 40,
+          right: 800 + (i % 5) * 40 + 20,
+          bottom: 150 + Math.floor(i / 5) * 40 + 20,
+          width: 20,
+          height: 20
+        } as DOMRect);
+        pricingTable.appendChild(cell);
+      }
+      document.body.appendChild(pricingTable);
+
+      // Start the fill flow
+      const fillPromise = DatePickerEngine.fill(input, "2026-10-15");
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      // 2. Create the actual calendar popup near the input dynamically
+      const calendar = document.createElement("div");
+      calendar.className = "datepicker";
+      calendar.style.display = "block";
+      calendar.style.visibility = "visible";
+      calendar.style.opacity = "1";
+      makeVisible(calendar, 320, 280);
+      calendar.getBoundingClientRect = () => ({
+        x: 100, y: 140, left: 100, top: 140, right: 420, bottom: 420, width: 320, height: 280
+      } as DOMRect);
+
+      const header = document.createElement("div");
+      header.className = "datepicker-header";
+      header.textContent = "October 2026";
+      calendar.appendChild(header);
+
+      let dayClicked = false;
+      for (let i = 1; i <= 31; i++) {
+        const cell = document.createElement("div");
+        cell.className = "datepicker-cell";
+        cell.textContent = String(i);
+        makeVisible(cell, 20, 20);
+        cell.getBoundingClientRect = () => ({
+          x: 100 + (i % 7) * 40,
+          y: 180 + Math.floor(i / 7) * 40,
+          left: 100 + (i % 7) * 40,
+          top: 180 + Math.floor(i / 7) * 40,
+          right: 100 + (i % 7) * 40 + 20,
+          bottom: 180 + Math.floor(i / 7) * 40 + 20,
+          width: 20,
+          height: 20
+        } as DOMRect);
+        if (i === 15) {
+          cell.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026-10-15";
+          });
+        }
+        calendar.appendChild(cell);
+      }
+      document.body.appendChild(calendar);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026-10-15");
+    });
+
+    it("should correctly detect calendar popup when nested inside a role=\"dialog\" modal container", async () => {
+      const input = document.createElement("input");
+      input.className = "datepicker";
+      document.body.appendChild(input);
+
+      input.getBoundingClientRect = () => ({
+        x: 100, y: 100, left: 100, top: 100, right: 200, bottom: 130, width: 100, height: 30
+      } as DOMRect);
+
+      // Create outer dialog
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      makeVisible(dialog, 400, 400);
+      dialog.getBoundingClientRect = () => ({
+        x: 50, y: 50, left: 50, top: 50, right: 450, bottom: 450, width: 400, height: 400
+      } as DOMRect);
+      document.body.appendChild(dialog);
+
+      const fillPromise = DatePickerEngine.fill(input, "2026-10-15");
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Create calendar inside dialog
+      const calendar = document.createElement("div");
+      calendar.className = "datepicker";
+      makeVisible(calendar, 300, 300);
+      calendar.getBoundingClientRect = () => ({
+        x: 100, y: 140, left: 100, top: 140, right: 400, bottom: 440, width: 300, height: 300
+      } as DOMRect);
+      dialog.appendChild(calendar);
+
+      const header = document.createElement("div");
+      header.className = "datepicker-header";
+      header.textContent = "October 2026";
+      calendar.appendChild(header);
+
+      let dayClicked = false;
+      for (let i = 1; i <= 31; i++) {
+        const cell = document.createElement("div");
+        cell.className = "datepicker-cell";
+        cell.textContent = String(i);
+        makeVisible(cell, 20, 20);
+        cell.getBoundingClientRect = () => ({
+          x: 110 + (i % 7) * 30,
+          y: 180 + Math.floor(i / 7) * 30,
+          left: 110 + (i % 7) * 30,
+          top: 180 + Math.floor(i / 7) * 30,
+          right: 110 + (i % 7) * 30 + 20,
+          bottom: 180 + Math.floor(i / 7) * 30 + 20,
+          width: 20,
+          height: 20
+        } as DOMRect);
+        if (i === 15) {
+          cell.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026-10-15";
+          });
+        }
+        calendar.appendChild(cell);
+      }
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026-10-15");
+    });
+
+    it("should correctly detect lazy-loaded calendar popup matching common selector before day cells are rendered", async () => {
+      const input = document.createElement("input");
+      input.className = "datepicker";
+      document.body.appendChild(input);
+
+      input.getBoundingClientRect = () => ({
+        x: 100, y: 100, left: 100, top: 100, right: 200, bottom: 130, width: 100, height: 30
+      } as DOMRect);
+
+      const fillPromise = DatePickerEngine.fill(input, "2026-10-15");
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Create lazy calendar wrapper (empty initially)
+      const calendar = document.createElement("div");
+      calendar.className = "datepicker";
+      calendar.style.display = "block";
+      calendar.style.visibility = "visible";
+      calendar.style.opacity = "1";
+      makeVisible(calendar, 320, 280);
+      calendar.getBoundingClientRect = () => ({
+        x: 100, y: 140, left: 100, top: 140, right: 420, bottom: 420, width: 320, height: 280
+      } as DOMRect);
+      document.body.appendChild(calendar);
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Append header and day cells later
+      const header = document.createElement("div");
+      header.className = "datepicker-header";
+      header.textContent = "October 2026";
+      calendar.appendChild(header);
+
+      let dayClicked = false;
+      for (let i = 1; i <= 31; i++) {
+        const cell = document.createElement("div");
+        cell.className = "datepicker-cell";
+        cell.textContent = String(i);
+        makeVisible(cell, 20, 20);
+        cell.getBoundingClientRect = () => ({
+          x: 100 + (i % 7) * 40,
+          y: 180 + Math.floor(i / 7) * 40,
+          left: 100 + (i % 7) * 40,
+          top: 180 + Math.floor(i / 7) * 40,
+          right: 100 + (i % 7) * 40 + 20,
+          bottom: 180 + Math.floor(i / 7) * 40 + 20,
+          width: 20,
+          height: 20
+        } as DOMRect);
+        if (i === 15) {
+          cell.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026-10-15";
+          });
+        }
+        calendar.appendChild(cell);
+      }
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026-10-15");
+    });
+
+    it("should correctly detect progressively loaded calendar when only 7 day cells are rendered", async () => {
+      const input = document.createElement("input");
+      input.className = "datepicker";
+      document.body.appendChild(input);
+
+      input.getBoundingClientRect = () => ({
+        x: 100, y: 100, left: 100, top: 100, right: 200, bottom: 130, width: 100, height: 30
+      } as DOMRect);
+
+      const fillPromise = DatePickerEngine.fill(input, "2026-10-05");
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Create calendar with only 7 days (representing single week or progressive first row)
+      const calendar = document.createElement("div");
+      calendar.className = "datepicker";
+      makeVisible(calendar, 320, 100);
+      calendar.getBoundingClientRect = () => ({
+        x: 100, y: 140, left: 100, top: 140, right: 420, bottom: 240, width: 320, height: 100
+      } as DOMRect);
+      document.body.appendChild(calendar);
+
+      const header = document.createElement("div");
+      header.className = "datepicker-header";
+      header.textContent = "October 2026";
+      calendar.appendChild(header);
+
+      let dayClicked = false;
+      for (let i = 1; i <= 7; i++) {
+        const cell = document.createElement("div");
+        cell.className = "datepicker-cell";
+        cell.textContent = String(i);
+        makeVisible(cell, 20, 20);
+        cell.getBoundingClientRect = () => ({
+          x: 100 + (i % 7) * 40,
+          y: 180,
+          left: 100 + (i % 7) * 40,
+          top: 180,
+          right: 100 + (i % 7) * 40 + 20,
+          bottom: 200,
+          width: 20,
+          height: 20
+        } as DOMRect);
+        if (i === 5) {
+          cell.addEventListener("click", () => {
+            dayClicked = true;
+            input.value = "2026-10-05";
+          });
+        }
+        calendar.appendChild(cell);
+      }
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const success = await fillPromise;
+      expect(success).toBe(true);
+      expect(dayClicked).toBe(true);
+      expect(input.value).toBe("2026-10-05");
     });
   });
 

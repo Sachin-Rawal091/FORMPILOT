@@ -396,15 +396,23 @@ export class Executor {
     let state = (await StateManager.getState()) || this.createFallbackState(totalRows);
 
     let excelRows: ExcelRow[] = [];
-    let currentChunkOffset = -1;
+    let currentChunkStart = -1;  // Which logical row index this chunk starts at
+    // Track the IDB rowIndex of the last row in the current chunk so we can
+    // use it as the cursor boundary for the next chunk.  IDB keys (rowIndex)
+    // are NOT the same as the 0-based loop counter (rowIdx) — they are
+    // Excel-row-number-based (i + 2) and may have gaps from skipped blank rows.
+    let lastLoadedRowIndex: number | undefined = undefined;
 
     for (let rowIdx = state.currentRowIndex; rowIdx < totalRows; rowIdx++) {
       if (!this.isRunning) break;
 
       // Load chunk if needed
-      const neededChunkOffset = Math.floor(rowIdx / EXCEL_CHUNK_SIZE) * EXCEL_CHUNK_SIZE;
-      if (currentChunkOffset !== neededChunkOffset) {
-        const afterRowIndex = neededChunkOffset > 0 ? neededChunkOffset - 1 : undefined;
+      const neededChunkStart = Math.floor(rowIdx / EXCEL_CHUNK_SIZE) * EXCEL_CHUNK_SIZE;
+      if (currentChunkStart !== neededChunkStart) {
+        // For the first chunk, start from the beginning (afterRowIndex = undefined).
+        // For subsequent chunks, use the actual IDB rowIndex of the last row in
+        // the previous chunk as the cursor lower bound.
+        const afterRowIndex = neededChunkStart > 0 ? lastLoadedRowIndex : undefined;
         const chunkRes = await this.safeSendMessage({
           type: MessageType.GET_EXCEL_DATA,
           payload: { afterRowIndex, limit: EXCEL_CHUNK_SIZE },
@@ -415,13 +423,17 @@ export class Executor {
           throw new Error(chunkRes?.error || "Failed to load Excel row chunk.");
         }
         excelRows = chunkRes.excelRows;
-        currentChunkOffset = neededChunkOffset;
+        currentChunkStart = neededChunkStart;
+        // Remember the last row's IDB key for next chunk boundary
+        if (excelRows.length > 0) {
+          lastLoadedRowIndex = excelRows[excelRows.length - 1].rowIndex;
+        }
       }
 
-      const chunkIndex = rowIdx - currentChunkOffset;
+      const chunkIndex = rowIdx - currentChunkStart;
       if (chunkIndex < 0 || chunkIndex >= excelRows.length) {
         logger.warn('Executor', `Excel chunk misaligned for row ${rowIdx}; reloading aligned chunk.`);
-        currentChunkOffset = -1;
+        currentChunkStart = -1;
         rowIdx--;
         continue;
       }

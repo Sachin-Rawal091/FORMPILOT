@@ -2,6 +2,7 @@ import { DatePickerAdapter } from "../DatePickerAdapter";
 import { dispatchEvents } from "../../domUtils";
 import { SmartWaitEngine } from "../../engines/SmartWaitEngine";
 import { logger } from "../../../utils/logger";
+import { GENERIC_DATEPICKER_MAX_DISTANCE_PX } from "../../../shared/constants";
 
 /**
  * Fallback adapter for unknown date pickers.
@@ -12,6 +13,7 @@ import { logger } from "../../../utils/logger";
  */
 export class GenericDatePickerAdapter implements DatePickerAdapter {
   readonly name = "GenericDatePickerAdapter";
+  private activeElement: HTMLElement | null = null;
 
   matches(element: HTMLElement): boolean {
     if (!(element instanceof HTMLInputElement)) return false;
@@ -33,6 +35,7 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
 
   async open(element: HTMLElement): Promise<boolean> {
     logger.info("GenericDatePickerAdapter", "Attempting to open generic calendar...");
+    this.activeElement = element;
 
     // 1. Close any already open calendar popup to ensure clean state
     await this.closeAllCalendars();
@@ -46,6 +49,9 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
     const observer = new MutationObserver((_, obs) => {
       const popup = this.findCalendarPopup();
       if (popup) {
+        if (this.isSpecificCalendarContainer(popup) && this.getNumberCount(popup) === 0) {
+          return;
+        }
         popupFound = true;
         obs.disconnect();
         resolvePromise(true);
@@ -226,6 +232,70 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
     return false;
   }
 
+  private getDistance(el1: HTMLElement, el2: HTMLElement): number {
+    const rect1 = el1.getBoundingClientRect();
+    const rect2 = el2.getBoundingClientRect();
+    
+    const c1x = rect1.left + rect1.width / 2;
+    const c1y = rect1.top + rect1.height / 2;
+    const c2x = rect2.left + rect2.width / 2;
+    const c2y = rect2.top + rect2.height / 2;
+    
+    const dx = c1x - c2x;
+    const dy = c1y - c2y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private getNumberCount(el: HTMLElement): number {
+    const children = Array.from(el.querySelectorAll("*"));
+    let count = children.filter((child) => {
+      const text = this.normalizeNumbers(child.textContent?.trim() || "");
+      const num = Number(text);
+      return !isNaN(num) && num >= 1 && num <= 31 && text.length <= 2;
+    }).length;
+
+    if (children.length === 0) {
+      const text = this.normalizeNumbers(el.textContent?.trim() || "");
+      const num = Number(text);
+      if (!isNaN(num) && num >= 1 && num <= 31 && text.length <= 2) {
+        count = 1;
+      }
+    }
+    return count;
+  }
+
+  private isSpecificCalendarContainer(el: HTMLElement): boolean {
+    const isMatch = /picker|calendar|date/i.test(el.className + " " + el.id);
+    const isControl = /cell|day|btn|button|input/i.test(el.className + " " + el.id);
+    return isMatch && !isControl;
+  }
+
+  private isValidContainer(el: HTMLElement): boolean {
+    return this.isSpecificCalendarContainer(el) || this.getNumberCount(el) >= 7;
+  }
+
+  private filterContainers(elements: HTMLElement[]): HTMLElement[] {
+    return elements.filter(el => {
+      // If 'el' contains any 'other' element that is a valid calendar container,
+      // then 'other' is a more specific calendar container. We prefer 'other', so we discard 'el'.
+      const containsMoreSpecific = elements.some(other => {
+        if (other === el) return false;
+        return el.contains(other) && this.isValidContainer(other);
+      });
+      if (containsMoreSpecific) return false;
+
+      // If 'el' is contained by some 'other' element, and 'el' is NOT a valid calendar container (meaning 'el' is a leaf cell),
+      // we discard 'el'.
+      const isLeafInsideOther = elements.some(other => {
+        if (other === el) return false;
+        return other.contains(el) && !this.isValidContainer(el);
+      });
+      if (isLeafInsideOther) return false;
+
+      return true;
+    });
+  }
+
   private findCalendarPopup(): HTMLElement | null {
     const commonSelectors = [
       ".datepicker", ".date-picker", ".datepicker-dropdown", ".ui-datepicker",
@@ -235,15 +305,45 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
       "[id*=\"calendar\"]", "[role=\"dialog\"]", "[role=\"grid\"]"
     ];
 
+    const candidates: HTMLElement[] = [];
+    const seen = new Set<HTMLElement>();
+
     for (const sel of commonSelectors) {
-      const el = document.querySelector(sel) as HTMLElement;
-      if (el && this.isElementVisible(el)) {
-        return el;
+      const elements = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
+      for (const el of elements) {
+        if (el && this.isElementVisible(el) && !seen.has(el)) {
+          seen.add(el);
+          candidates.push(el);
+        }
+      }
+    }
+
+    const topLevelCandidates = this.filterContainers(candidates);
+
+    if (topLevelCandidates.length > 0) {
+      if (this.activeElement) {
+        const inputEl = this.activeElement;
+        const candidateScores = topLevelCandidates.map(el => {
+          const dist = this.getDistance(inputEl, el);
+          return { el, dist };
+        });
+
+        candidateScores.sort((a, b) => a.dist - b.dist);
+
+        const best = candidateScores[0];
+        const isSpecific = /picker|calendar|date/i.test(best.el.className + " " + best.el.id);
+        if (best.dist < GENERIC_DATEPICKER_MAX_DISTANCE_PX || isSpecific) {
+          return best.el;
+        }
+      } else {
+        return topLevelCandidates[0];
       }
     }
 
     // Structural heuristic: any visible element containing at least 20 numbers from 1 to 31
     const all = Array.from(document.querySelectorAll("body *")) as HTMLElement[];
+    const structuralCandidates: { el: HTMLElement; dist: number }[] = [];
+
     for (const el of all) {
       if (el.tagName === "BODY" || el.tagName === "HTML" || el.offsetWidth > 600 || el.offsetHeight > 600) {
         continue;
@@ -291,10 +391,23 @@ export class GenericDatePickerAdapter implements DatePickerAdapter {
           const hasSevenColumns = !hasLayout || isTest || (uniqueLefts.size >= 6 && uniqueLefts.size <= 8);
 
           if (hasHeader && hasNav && hasSevenColumns) {
-            return el;
+            if (this.activeElement) {
+              const dist = this.getDistance(this.activeElement, el);
+              structuralCandidates.push({ el, dist });
+            } else {
+              return el;
+            }
           }
         }
       }
+    }
+
+    if (structuralCandidates.length > 0) {
+      const structuralElements = structuralCandidates.map(c => c.el);
+      const topLevelStructural = this.filterContainers(structuralElements);
+      const filteredStructuralCandidates = structuralCandidates.filter(c => topLevelStructural.includes(c.el));
+      filteredStructuralCandidates.sort((a, b) => a.dist - b.dist);
+      return filteredStructuralCandidates[0].el;
     }
 
     return null;
