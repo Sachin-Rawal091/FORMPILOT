@@ -59,4 +59,9 @@ export const DATEPICKER_NAV_MAX_ITERATIONS = 60;
 export const DATEPICKER_VALUE_SETTLE_TIMEOUT = 2000;
 export const GENERIC_DATEPICKER_MAX_DISTANCE_PX = 600;
 
+// Submit Verification Engine
+export const MAX_SUBMIT_RETRIES = 1;
+export const SUBMIT_RETRY_SETTLE_MS = 2000;
+
+
 

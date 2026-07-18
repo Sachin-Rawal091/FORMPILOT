@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useFormPilotStore } from '../store/useFormPilotStore';
 import { Step, Action } from '../../types';
+import { StorageManager } from '../../storage/StorageManager';
+import { logger } from '../../utils/logger';
 
 export const DataScreen: React.FC = () => {
   const {
@@ -419,7 +421,12 @@ export const DataScreen: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await StorageManager.setExcelData([], true); // clearFirst=true wipes the IndexedDB store
+                  } catch (err) {
+                    logger.error('DataScreen', 'Failed to clear excelData from IndexedDB:', err);
+                  }
                   useFormPilotStore.setState({ excelData: [], excelRowCount: 0, excelHeaders: [], fuzzyMapping: {} });
                   setShowClearConfirm(false);
                 }}

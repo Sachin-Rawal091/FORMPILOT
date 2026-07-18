@@ -9,6 +9,9 @@ export default defineConfig({
     crx({ manifest }),
   ],
   build: {
+    modulePreload: {
+      polyfill: false,
+    },
     // Force ALL assets (notably the @fontsource woff/woff2 files pulled in via
     // index.css) to be emitted as separate files instead of inlined as base64
     // data: URIs. Inlined fonts violate the extension's CSP font-src directive —
@@ -18,3 +21,4 @@ export default defineConfig({
     assetsInlineLimit: 0,
   },
 });
+

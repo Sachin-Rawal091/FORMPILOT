@@ -177,4 +177,103 @@ describe('Executor Unit Tests', () => {
     expect(dismissed).toBe(true);
     expect(clickSpy).toHaveBeenCalled();
   });
+
+  it('should retry form submission when stuck on the same page with UNKNOWN outcome, then succeed', async () => {
+    const { ResponseDetectionEngine } = await import('../src/content/engines/ResponseDetectionEngine');
+    const { RetryEngine } = await import('../src/content/engines/RetryEngine');
+    const { StorageManager } = await import('../src/storage/StorageManager');
+    const { Executor } = await import('../src/content/executor');
+
+    const mockRecording = {
+      id: 'rec-2',
+      name: 'Test Submit Flow',
+      siteUrl: 'http://localhost',
+      siteId: 'localhost',
+      steps: [
+        { id: 'step-submit', action: Action.CLICK, selector: '#submit-btn', selectorMeta: {}, pageId: 'page_1' }
+      ],
+      pages: [],
+      pageCount: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      version: 1
+    };
+
+    const mockExcelRows: ExcelRow[] = [
+      { rowIndex: 0, data: {}, status: RowStatus.PENDING, isValid: true, validationErrors: [] }
+    ];
+
+    vi.spyOn(StorageManager, 'getRecordings').mockResolvedValue([mockRecording]);
+    vi.spyOn(StorageManager, 'getExcelData').mockResolvedValue(mockExcelRows);
+    vi.spyOn(StorageManager, 'setExcelData').mockResolvedValue(undefined);
+    vi.spyOn(StorageManager, 'addLogEntry').mockResolvedValue(undefined);
+
+    // Mock first submission outcome as UNKNOWN, second as SUCCESS
+    let runCount = 0;
+    const runSubmissionDetectionSpy = vi.spyOn(ResponseDetectionEngine, 'runSubmissionDetection').mockImplementation(async () => {
+      runCount++;
+      return runCount === 1 ? "UNKNOWN" : "SUCCESS";
+    });
+
+    const executeStepWithRetrySpy = vi.spyOn(RetryEngine, 'executeStepWithRetry').mockResolvedValue({
+      success: true,
+      resolvedStatus: 'SUCCESS',
+      retriesUsed: 0
+    });
+
+    mockChrome.runtime.sendMessage.mockImplementation((msg: any, callback?: any) => {
+      if (callback) {
+        if (msg.type === MessageType.GET_RECORDING_DATA) {
+          callback({ recording: mockRecording });
+        } else if (msg.type === MessageType.GET_EXCEL_DATA) {
+          if (msg.payload?.countOnly) {
+            callback({ count: mockExcelRows.length });
+          } else {
+            callback({ excelRows: mockExcelRows });
+          }
+        } else if (msg.type === MessageType.SET_EXCEL_DATA) {
+          callback({ success: true });
+        } else if (msg.type === MessageType.ADD_LOG_ENTRY) {
+          callback({ success: true });
+        }
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const executor = new Executor();
+    sessionStorage.setItem('__fp_reset_done_sess-2', 'true');
+
+    // Setup initial running state
+    executionStateStore = {
+      sessionId: 'sess-2',
+      recordingId: 'rec-2',
+      currentRowIndex: 0,
+      currentStepIndex: 0,
+      currentPageId: '',
+      status: ExecutionStatus.RUNNING,
+      totalRows: 1,
+      completedRows: 0,
+      failedRows: 0,
+      skippedRows: 0,
+      pageRetryCount: 0,
+      mutexLock: 'sess-2',
+      captchaPending: false,
+      tabContext: 1,
+      lastStepResult: ''
+    };
+
+    // Run execution start
+    await executor.start('rec-2', 'sess-2');
+
+    // Wait a brief period for async loops
+    await new Promise(r => setTimeout(r, 600));
+
+    // Verify executeStepWithRetry was called twice (once for initial run, once for retry because it was stuck)
+    expect(executeStepWithRetrySpy).toHaveBeenCalledTimes(2);
+    // Verify runSubmissionDetection was called twice
+    expect(runSubmissionDetectionSpy).toHaveBeenCalledTimes(2);
+    // Verify row status was updated to SUCCESS
+    expect(executionStateStore.completedRows).toBe(1);
+    expect(executionStateStore.currentRowIndex).toBe(1);
+  });
 });

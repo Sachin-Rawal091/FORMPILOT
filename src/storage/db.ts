@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'FormPilotDB';
-const DB_VERSION = 6; // v6 ensures the sessions timestamp index is created for retention cleanup
+const DB_VERSION = 7; // v7 adds the non-extractable CryptoKey store for encryption-at-rest
 
 export async function getDB(): Promise<IDBPDatabase> {
   const db = await openDB(DB_NAME, DB_VERSION, {
@@ -51,6 +51,11 @@ export async function getDB(): Promise<IDBPDatabase> {
           if (!sessionStore.indexNames.contains('timestamp')) {
             sessionStore.createIndex('timestamp', 'timestamp');
           }
+        }
+      }
+      if (oldVersion < 7) {
+        if (!db.objectStoreNames.contains('keys')) {
+          db.createObjectStore('keys'); // out-of-line keys — db.put('keys', cryptoKey, 'fpDataKey')
         }
       }
     },

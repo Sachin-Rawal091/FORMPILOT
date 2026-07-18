@@ -47,7 +47,7 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
 
     initStore: async () => {
       // Expose to window for testing/debugging
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && import.meta.env.DEV) {
         (window as any).store = {
           getState: () => get(),
           setState: (newState: any) => set(newState)

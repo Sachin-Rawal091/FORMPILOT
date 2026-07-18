@@ -22,7 +22,9 @@ import {
   EXCEL_CHUNK_SIZE,
   POST_ROW_DELAY_MS,
   POST_SUBMIT_SETTLE_MS,
-  WAIT_DOM_STABLE_TIMEOUT
+  WAIT_DOM_STABLE_TIMEOUT,
+  MAX_SUBMIT_RETRIES,
+  SUBMIT_RETRY_SETTLE_MS
 } from "../shared/constants";
 import { logger } from "../utils/logger";
 
@@ -420,6 +422,19 @@ export class Executor {
           timestamp: Date.now()
         }, 5000);
         if (chunkRes?.error || !chunkRes?.excelRows) {
+          const isDecryptFailure = typeof chunkRes?.error === 'string' &&
+            (chunkRes.error.toLowerCase().includes('decrypt') || chunkRes.error.toLowerCase().includes('keyversion'));
+          if (isDecryptFailure) {
+            // Same recovery StorageManager/executionSlice's pre-scan already does — mirror it here so a
+            // failure mid-run leaves things in the same clean, re-uploadable state as a failure at the start.
+            await this.safeSendMessage({
+              type: MessageType.SET_EXCEL_DATA,
+              payload: { excelRows: [], updateOnly: false },
+              sessionId: this.sessionId,
+              timestamp: Date.now()
+            }, 5000).catch(() => {});
+            throw new Error("Your spreadsheet data could not be decrypted and has been cleared. Please re-upload your Excel file and restart.");
+          }
           throw new Error(chunkRes?.error || "Failed to load Excel row chunk.");
         }
         excelRows = chunkRes.excelRows;
@@ -912,17 +927,67 @@ export class Executor {
       return "SKIPPED";
     }
 
-    // 4. Use DOM stability detection instead of fixed delay to detect submission result
-    // BUG-025: SmartWaitEngine.waitForDOMStability is more reliable than a fixed POST_SUBMIT_SETTLE_MS
-    await SmartWaitEngine.waitForDOMStability(POST_SUBMIT_SETTLE_MS).catch((err) => {
-      logger.debug('Executor', `Post-submit DOM stability wait timed out: ${err.message}`);
-    });
+    // ─── SAFE SUBMIT-VERIFICATION ENGINE (SSVE) ─────────────────────
+    // After all recorded steps complete, verify the submission outcome.
+    // If the page is stuck (no success, no failure, no navigation),
+    // safely retry the submit action up to MAX_SUBMIT_RETRIES times.
+    // NEVER retries when validation errors are visible (useless) or
+    // when success is detected (would cause duplicate submissions).
 
-    // 5. Run final submission detection checks on page
-    const finalOutcome = await ResponseDetectionEngine.runSubmissionDetection(
-      window.location.href,
-      this.sessionId
-    );
+    const preSubmitUrl = window.location.href;
+    let submitRetryCount = 0;
+    let finalOutcome: "SUCCESS" | "FAILED" | "UNKNOWN" = "UNKNOWN";
+
+    while (submitRetryCount <= MAX_SUBMIT_RETRIES) {
+      if (!this.isRunning) return "ABORTED";
+
+      // 1. Wait for DOM to stabilize after submit
+      const settleMs = submitRetryCount === 0
+        ? POST_SUBMIT_SETTLE_MS
+        : SUBMIT_RETRY_SETTLE_MS;
+      await SmartWaitEngine.waitForDOMStability(settleMs).catch((err) => {
+        logger.debug('Executor', `Post-submit DOM stability wait timed out: ${err.message}`);
+      });
+
+      // 2. Run full detection (CAPTCHA + success + failure)
+      finalOutcome = await ResponseDetectionEngine.runSubmissionDetection(
+        window.location.href,
+        this.sessionId
+      );
+
+      // 3. Definitive outcome — stop immediately
+      if (finalOutcome === "SUCCESS" || finalOutcome === "FAILED") {
+        break;
+      }
+
+      // 4. Check if the URL changed (navigation occurred) — treat as success
+      if (window.location.href !== preSubmitUrl) {
+        logger.debug('Executor', `URL changed after submit (${preSubmitUrl} → ${window.location.href}), treating as SUCCESS.`);
+        finalOutcome = "SUCCESS";
+        break;
+      }
+
+      // 5. UNKNOWN outcome — page is stuck. Attempt safe retry if budget remains.
+      if (submitRetryCount < MAX_SUBMIT_RETRIES) {
+        submitRetryCount++;
+        logger.warn('Executor', `Submit verification inconclusive — page stuck on same URL. Safe retry ${submitRetryCount}/${MAX_SUBMIT_RETRIES}...`);
+
+        // Find and re-click the last submit/click/navigate step
+        const lastStep = this.recordingSteps[this.recordingSteps.length - 1];
+        if (lastStep) {
+          const retryRes = await RetryEngine.executeStepWithRetry(lastStep, row.data);
+          if (!retryRes.success) {
+            logger.warn('Executor', `Submit retry step failed: ${retryRes.error?.message}`);
+            finalOutcome = "FAILED";
+            break;
+          }
+        }
+      } else {
+        // Budget exhausted — treat as success if all steps completed
+        // (many forms simply don't show success banners)
+        break;
+      }
+    }
 
     // If all recorded steps completed successfully and no explicit failure was
     // detected on the page, treat the row as SUCCESS.  The old logic treated
@@ -1048,6 +1113,30 @@ export class Executor {
         status: ExecutionStatus.FAILED,
         mutexLock: null // Release Mutex
       };
+      
+      // Save log entry for the fatal error to IndexedDB so it shows in popup terminal
+      await this.safeSendMessage({
+        type: MessageType.ADD_LOG_ENTRY,
+        payload: {
+          entry: {
+            id: this.generateUUID(),
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            rowIndex: state.currentRowIndex,
+            stepId: "SYSTEM",
+            action: Action.WAIT,
+            selector: "executor",
+            result: StepResult.FAILED,
+            status: "FAILED",
+            error: errMsg,
+            retryCount: 0,
+            duration: 0
+          }
+        },
+        sessionId: this.sessionId,
+        timestamp: Date.now()
+      }, 5000).catch(() => {});
+
       this.broadcastStateUpdate(failedState);
 
       // Notify service worker to clear badge icon

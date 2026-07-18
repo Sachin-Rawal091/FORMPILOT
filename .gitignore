@@ -102,7 +102,7 @@ agent_temp/
 issue.md
 bug.md
 FormPilot_RecordingEngine_Fix_Plan.md
-*[Pp]lan.md
+*[Pp]lan*.md
 
 # --- Local Sandbox & Test Scripts ---
 # Mock portals and local servers used only for offline sandbox testing
