@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useFormPilotStore } from '../store/useFormPilotStore';
 import { Step, Action } from '../../types';
 import { StorageManager } from '../../storage/StorageManager';
@@ -6,7 +6,9 @@ import { logger } from '../../utils/logger';
 
 export const DataScreen: React.FC = () => {
   const {
+    recordings,
     selectedRecording,
+    setSelectedRecording,
     excelRowCount,
     excelHeaders,
     fuzzyMapping,
@@ -23,6 +25,13 @@ export const DataScreen: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
 
+  // Auto-select first recording if none selected and recordings exist
+  useEffect(() => {
+    if (!selectedRecording && recordings.length > 0) {
+      setSelectedRecording(recordings[0]);
+    }
+  }, [selectedRecording, recordings, setSelectedRecording]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -33,14 +42,16 @@ export const DataScreen: React.FC = () => {
 
   const processFile = async (file: File) => {
     setErrorMsg('');
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      setErrorMsg('Please upload a valid Excel spreadsheet file (.xlsx or .xls).');
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const validExtensions = ['xlsx', 'xls', 'csv', 'ods'];
+    if (!ext || !validExtensions.includes(ext)) {
+      setErrorMsg('Please upload a valid spreadsheet file (.xlsx, .xls, .csv, or .ods).');
       return;
     }
     try {
       await parseExcel(file);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to parse Excel workbook.');
+      setErrorMsg(err.message || 'Failed to parse spreadsheet file.');
     }
   };
 
@@ -122,16 +133,16 @@ export const DataScreen: React.FC = () => {
           </svg>
         </div>
         <div className="space-y-1">
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 font-outfit">No Workflow Selected</h3>
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 font-outfit">No Workflows Recorded Yet</h3>
           <p className="text-xs text-slate-400 max-w-sm">
-            You must choose an automation workflow on the home screen before loading and mapping spreadsheet columns.
+            Record an automation flow on the home screen first, then return here to load and map spreadsheet columns.
           </p>
         </div>
         <button
           onClick={() => setActiveTab('home')}
           className="px-5 py-2.5 rounded-full bg-fp-accent text-white dark:bg-white dark:text-fp-sidebar font-semibold text-xs active:scale-95 transition shadow-md shadow-fp-accent/15"
         >
-          Back to Workflows
+          Go to Home Screen
         </button>
       </div>
     );
@@ -141,13 +152,53 @@ export const DataScreen: React.FC = () => {
     <div className="space-y-8 animate-fade-in">
       
       {/* Title block */}
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-semibold font-outfit tracking-wide text-slate-900 dark:text-white">
-          Data Mapping Console
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed">
-          Connect your Excel spreadsheet data rows with the target web selectors defined in <span className="font-semibold text-slate-800 dark:text-slate-200 font-outfit">"{selectedRecording.name}"</span>.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-semibold font-outfit tracking-wide text-slate-900 dark:text-white">
+            Data Mapping Console
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed">
+            Connect your spreadsheet data rows with target web selectors defined in <span className="font-semibold text-slate-800 dark:text-slate-200 font-outfit">"{selectedRecording.name}"</span>.
+          </p>
+        </div>
+
+        {/* Workflow Switcher Pill */}
+        <div className="flex items-center gap-2.5 bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/90 p-1.5 pl-3.5 rounded-2xl shadow-sm shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-400 font-mono tracking-wider uppercase">
+              Workflow:
+            </span>
+          </div>
+
+          {recordings.length > 1 ? (
+            <div className="relative flex items-center">
+              <select
+                value={selectedRecording.id}
+                onChange={(e) => {
+                  const rec = recordings.find(r => r.id === e.target.value);
+                  if (rec) setSelectedRecording(rec);
+                }}
+                className="appearance-none bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 text-xs font-semibold font-outfit pl-3 pr-8 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 cursor-pointer hover:bg-slate-200/80 dark:hover:bg-slate-800 transition-all"
+              >
+                {recordings.map(rec => (
+                  <option key={rec.id} value={rec.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 py-1 font-outfit">
+                    {rec.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 pointer-events-none text-slate-400 dark:text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          ) : (
+            <span className="px-3 py-1.5 text-xs font-semibold font-outfit text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/70">
+              {selectedRecording.name}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -175,7 +226,7 @@ export const DataScreen: React.FC = () => {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept=".xlsx, .xls"
+                accept=".xlsx, .xls, .csv, .ods, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                 className="hidden"
               />
 
@@ -196,7 +247,7 @@ export const DataScreen: React.FC = () => {
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">Drag & drop spreadsheet here</span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500 block">Supports Microsoft Excel files (.xlsx, .xls)</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 block">Supports Excel (.xlsx, .xls) & CSV files (.csv)</span>
                   </div>
                   <button 
                     type="button"
@@ -267,7 +318,7 @@ export const DataScreen: React.FC = () => {
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept=".xlsx, .xls"
+                  accept=".xlsx, .xls, .csv, .ods, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                   className="hidden"
                 />
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 leading-normal px-2">

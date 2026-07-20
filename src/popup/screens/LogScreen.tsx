@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useFormPilotStore } from '../store/useFormPilotStore';
 import { LogEntry, SelectorStrategy, Recording, Action, SessionMeta } from '../../types';
 import { StorageManager } from '../../storage/StorageManager';
 import { logger } from '../../utils/logger';
+import { RowResultAggregator, CSVExporter, JSONExporter } from '../../shared/export';
 
 export const LogScreen: React.FC = () => {
   const { executionState, recentLogs, recordings, loadRecordings } = useFormPilotStore();
@@ -15,6 +16,9 @@ export const LogScreen: React.FC = () => {
   const [filter, setFilter] = useState<'ALL' | 'FILLED' | 'WARN' | 'FAILED'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Load recordings and session metadata on mount
   useEffect(() => {
@@ -79,29 +83,18 @@ export const LogScreen: React.FC = () => {
     loadSessionLogs();
   }, [selectedSessionId, recentLogs, executionState?.sessionId]);
 
-  const downloadFile = (content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
-    const url = URL.createObjectURL(blob);
-
-    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.download) {
-      chrome.downloads.download({
-        url,
-        filename,
-        saveAs: true
-      }, () => {
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      });
-      return;
+  // Close export menu when clicking outside (Recommendation #15)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
-
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportMenu]);
 
   // Sync recent logs when active session is running
   useEffect(() => {
@@ -268,35 +261,69 @@ export const LogScreen: React.FC = () => {
     return [...logs].sort((a, b) => a.timestamp - b.timestamp);
   }, [activeLogs, searchTerm, filter]);
 
-  // Export CSV
-  const handleExportCSV = () => {
-    if (activeLogs.length === 0) return;
+  // --- Export handlers (thin callers to modular export system) ---
 
-    const headers = ['Timestamp', 'Row Index', 'Action', 'Selector', 'Value', 'Status', 'Error', 'Duration (ms)'];
-    const rows = activeLogs.map(log => [
-      new Date(log.timestamp).toISOString(),
-      log.rowIndex,
-      log.action,
-      `"${log.selector.replace(/"/g, '""')}"`,
-      log.value ? `"${log.value.replace(/"/g, '""')}"` : '',
-      log.status,
-      log.error ? `"${log.error.replace(/"/g, '""')}"` : '',
-      log.duration
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const filename = `formpilot_logs_${selectedSessionId || 'session'}.csv`;
-    downloadFile(csvContent, filename, 'text/csv');
+  /** Load Excel rows from IndexedDB and aggregate with logs into RowResult[] */
+  const aggregateResults = async () => {
+    const excelRows = await StorageManager.getExcelData();
+    return RowResultAggregator.aggregate(activeLogs, excelRows, activeWorkflow?.steps);
   };
 
-  // Export JSON
-  const handleExportJSON = () => {
-    if (activeLogs.length === 0) return;
-
-    const jsonString = JSON.stringify(activeLogs, null, 2);
-    const filename = `formpilot_logs_${selectedSessionId || 'session'}.json`;
-    downloadFile(jsonString, filename, 'application/json');
+  /** Get Excel column headers from the store or from loaded data */
+  const getExcelHeaders = async (): Promise<string[]> => {
+    const excelRows = await StorageManager.getExcelData(undefined, 1);
+    if (excelRows.length > 0) {
+      return Object.keys(excelRows[0].data);
+    }
+    return [];
   };
+
+  /** Wrapper: runs an export with loading state + duplicate prevention (Recommendations #14, #15) */
+  const runExport = async (exportFn: () => Promise<void>) => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setShowExportMenu(false);
+    try {
+      await exportFn();
+    } catch (err) {
+      logger.error('LogScreen', 'Export failed:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Results Report — CSV
+  const handleExportResultsCSV = () => runExport(async () => {
+    const [results, headers] = await Promise.all([aggregateResults(), getExcelHeaders()]);
+    const workflowName = activeWorkflow?.name || 'export';
+    CSVExporter.downloadResultsReport(results, headers, workflowName);
+  });
+
+  // Results Report — JSON
+  const handleExportResultsJSON = () => runExport(async () => {
+    const results = await aggregateResults();
+    const workflowName = activeWorkflow?.name || 'export';
+    JSONExporter.downloadResultsReport(results, workflowName, selectedSessionId || 'session');
+  });
+
+  // Failed Rows Re-upload — CSV (data-only columns)
+  const handleExportFailedRows = () => runExport(async () => {
+    const [results, headers] = await Promise.all([aggregateResults(), getExcelHeaders()]);
+    const workflowName = activeWorkflow?.name || 'export';
+    CSVExporter.downloadFailedRows(results, headers, workflowName);
+  });
+
+  // Step-Level Logs — CSV (existing diagnostic export, now using proper escaping)
+  const handleExportStepCSV = () => runExport(async () => {
+    const workflowName = activeWorkflow?.name || 'export';
+    CSVExporter.downloadStepLogs(activeLogs, workflowName);
+  });
+
+  // Step-Level Logs — JSON (existing diagnostic export, now with envelope)
+  const handleExportStepJSON = () => runExport(async () => {
+    const workflowName = activeWorkflow?.name || 'export';
+    JSONExporter.downloadStepLogs(activeLogs as unknown as Array<Record<string, unknown>>, workflowName, selectedSessionId || 'session');
+  });
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -382,25 +409,82 @@ export const LogScreen: React.FC = () => {
         </div>
 
         {activeWorkflow && activeLogs.length > 0 && (
-          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+          <div className="relative shrink-0 self-end sm:self-auto" ref={exportMenuRef}>
             <button
-              onClick={handleExportCSV}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-full transition-all active:scale-95 flex items-center gap-2 border border-slate-200 dark:border-slate-800"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={isExporting}
+              className={`px-5 py-2.5 font-semibold text-xs rounded-full transition-all active:scale-95 flex items-center gap-2 border ${
+                isExporting
+                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed border-slate-200 dark:border-slate-800'
+                  : 'bg-fp-accent dark:bg-white text-white dark:text-fp-sidebar hover:opacity-90 border-transparent'
+              }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              <span>CSV</span>
+              {isExporting ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Export</span>
+                  <svg className={`w-3 h-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </button>
-            <button
-              onClick={handleExportJSON}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-full transition-all active:scale-95 flex items-center gap-2 border border-slate-200 dark:border-slate-800"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              <span>JSON</span>
-            </button>
+
+            {/* Export Dropdown Menu — grouped by category */}
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-fp-card-dark rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-fade-in">
+                {/* Results Group */}
+                <div className="px-3 py-1.5">
+                  <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Results</span>
+                </div>
+                <button onClick={handleExportResultsCSV} className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center gap-3">
+                  <span className="text-emerald-500">📊</span>
+                  <span>Results Report (CSV)</span>
+                </button>
+                <button onClick={handleExportResultsJSON} className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center gap-3">
+                  <span className="text-emerald-500">📊</span>
+                  <span>Results Report (JSON)</span>
+                </button>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-slate-100 dark:border-slate-800/60" />
+
+                {/* Re-run Group */}
+                <div className="px-3 py-1.5">
+                  <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Re-run</span>
+                </div>
+                <button onClick={handleExportFailedRows} className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center gap-3">
+                  <span className="text-amber-500">🔄</span>
+                  <span>Failed Rows Only (CSV)</span>
+                </button>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-slate-100 dark:border-slate-800/60" />
+
+                {/* Diagnostics Group */}
+                <div className="px-3 py-1.5">
+                  <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Diagnostics</span>
+                </div>
+                <button onClick={handleExportStepCSV} className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center gap-3">
+                  <span className="text-slate-400">📋</span>
+                  <span>Step Logs (CSV)</span>
+                </button>
+                <button onClick={handleExportStepJSON} className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center gap-3">
+                  <span className="text-slate-400">📋</span>
+                  <span>Step Logs (JSON)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

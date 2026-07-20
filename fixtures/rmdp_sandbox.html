@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>Kisan Rin Portal - RMDP DatePicker Sandbox</title>
+  
+  <!-- CSS Dependencies -->
+  <link rel="stylesheet" href="https://pmfby.amnex.co.in/iss/public/assets/css/bootstrap.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" crossorigin="anonymous">
+
+  <style>
+    /* Premium Glassmorphic Theme */
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --input-bg: rgba(15, 23, 42, 0.6);
+      --input-border: rgba(255, 255, 255, 0.15);
+      --input-focus: #4f46e5;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      font-family: 'Poppins', sans-serif;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 0;
+    }
+
+    .sandbox-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 850px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo-icon {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      color: white;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+
+    .brand-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.45rem;
+      letter-spacing: 0.5px;
+      margin: 0;
+      background: linear-gradient(to right, #10b981, #6366f1);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .sandbox-tag {
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-label {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.3px;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .input-wrapper i {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+      font-size: 1rem;
+    }
+
+    /* Override input styles to make them premium */
+    .form-control.rmdp-input {
+      background-color: var(--input-bg) !important;
+      border: 1px solid var(--input-border) !important;
+      color: var(--text-main) !important;
+      border-radius: 12px !important;
+      padding: 0.75rem 2.5rem 0.75rem 1rem !important;
+      height: auto !important;
+      font-size: 0.95rem !important;
+      transition: all 0.2s ease !important;
+      cursor: pointer !important;
+    }
+
+    .form-control.rmdp-input:focus {
+      border-color: var(--input-focus) !important;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+      outline: none !important;
+    }
+
+    .form-control.rmdp-input::placeholder {
+      color: rgba(255, 255, 255, 0.3) !important;
+    }
+
+    /* RMDP Calendar Styling - exact replication of production stylesheets */
+    .rmdp-container {
+      position: relative;
+      display: block;
+      width: 100%;
+    }
+
+    .rmdp-wrapper {
+      background-color: #fff;
+      border-radius: 8px;
+      direction: ltr;
+      text-align: center;
+      width: 275px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      border: 1px solid #cfd8e2;
+      padding: 8px;
+      font-family: Arial, Helvetica, sans-serif;
+      margin-top: 6px;
+    }
+
+    .rmdp-calendar {
+      height: max-content;
+      position: relative;
+    }
+
+    .rmdp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      height: 38px;
+      margin-top: 5px;
+      position: relative;
+    }
+
+    .rmdp-header-values {
+      color: #000;
+      margin: auto;
+      font-weight: bold;
+    }
+
+    .rmdp-header-values span {
+      padding: 0 4px;
+      cursor: pointer;
+      display: inline-block;
+    }
+
+    .rmdp-header-values span:hover {
+      color: #0074d9;
+    }
+
+    .rmdp-arrow-container {
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 24px;
+      width: 24px;
+      transition: all 0.2s;
+    }
+
+    .rmdp-arrow-container:hover {
+      background-color: #0074d9;
+      box-shadow: 0 0 3px #8798ad;
+    }
+
+    .rmdp-arrow {
+      border: solid #0074d9;
+      border-width: 0 2px 2px 0;
+      display: inline-block;
+      height: 5px;
+      width: 5px;
+      transition: border-color 0.2s;
+    }
+
+    .rmdp-arrow-container:hover .rmdp-arrow {
+      border-color: #fff;
+    }
+
+    .rmdp-right {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .rmdp-left {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .rmdp-right .rmdp-arrow {
+      transform: rotate(-45deg);
+    }
+
+    .rmdp-left .rmdp-arrow {
+      transform: rotate(135deg);
+    }
+
+    .rmdp-day-picker {
+      padding: 5px 0;
+    }
+
+    .rmdp-week {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .rmdp-day, .rmdp-week-day {
+      color: #000;
+      height: 34px;
+      width: 34px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .rmdp-week-day {
+      color: #0074d9;
+      cursor: default;
+      font-weight: 500;
+    }
+
+    .rmdp-day {
+      cursor: pointer;
+    }
+
+    .rmdp-day span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      transition: all 0.15s;
+    }
+
+    .rmdp-day:not(.rmdp-disabled):not(.rmdp-day-hidden) span:hover {
+      background-color: #7ea6f0;
+      color: #fff;
+    }
+
+    .rmdp-day.rmdp-today span {
+      background-color: #7fdbff;
+      color: #fff;
+    }
+
+    .rmdp-day.rmdp-selected span:not(.highlight) {
+      background-color: #0074d9;
+      box-shadow: 0 0 3px #8798ad;
+      color: #fff;
+    }
+
+    .rmdp-day.rmdp-deactive {
+      color: #cfd8e2;
+    }
+
+    .rmdp-day.rmdp-disabled {
+      color: #cfd8e2;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* Month and Year overlays */
+    .rmdp-month-picker, .rmdp-year-picker {
+      background-color: #fff;
+      border-radius: 0 0 5px 5px;
+      bottom: 2px;
+      left: 2px;
+      position: absolute;
+      right: 2px;
+      top: 2px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      padding: 10px 5px;
+      z-index: 10;
+    }
+
+    .rmdp-ym {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .rmdp-ym .rmdp-day {
+      flex: 1;
+      height: 40px;
+    }
+
+    .rmdp-ym .rmdp-day span {
+      border-radius: 8px;
+      width: 90%;
+      height: 32px;
+      font-size: 12px;
+    }
+
+    .rmdp-ym .rmdp-day.rmdp-selected span {
+      background-color: #0074d9;
+      color: white;
+    }
+
+    /* Range picker selection highlight overrides */
+    .rmdp-range {
+      background-color: #e6f7ff !important;
+      color: #000 !important;
+    }
+
+    .rmdp-range span {
+      border-radius: 0 !important;
+      width: 100% !important;
+      height: 28px !important;
+    }
+
+    .rmdp-range.start {
+      border-top-left-radius: 50% !important;
+      border-bottom-left-radius: 50% !important;
+      background-color: #e6f7ff !important;
+    }
+
+    .rmdp-range.start span {
+      border-radius: 50% !important;
+      background-color: #0074d9 !important;
+      color: #fff !important;
+      width: 28px !important;
+    }
+
+    .rmdp-range.end {
+      border-top-right-radius: 50% !important;
+      border-bottom-right-radius: 50% !important;
+      background-color: #e6f7ff !important;
+    }
+
+    .rmdp-range.end span {
+      border-radius: 50% !important;
+      background-color: #0074d9 !important;
+      color: #fff !important;
+      width: 28px !important;
+    }
+
+    .rmdp-range.start.end {
+      background-color: transparent !important;
+    }
+
+    .rmdp-range.start.end span {
+      border-radius: 50% !important;
+      background-color: #0074d9 !important;
+      color: #fff !important;
+    }
+
+    .rmdp-range-hover {
+      background-color: #f5f5f5 !important;
+    }
+
+    .rmdp-range-hover span {
+      border-radius: 0 !important;
+      width: 100% !important;
+    }
+
+    .rmdp-range-hover.start {
+      border-top-left-radius: 50% !important;
+      border-bottom-left-radius: 50% !important;
+    }
+
+    .rmdp-range-hover.start span {
+      border-radius: 50% !important;
+      background-color: #7ea6f0 !important;
+      color: #fff !important;
+      width: 28px !important;
+    }
+
+    .rmdp-range-hover.end {
+      border-top-right-radius: 50% !important;
+      border-bottom-right-radius: 50% !important;
+    }
+
+    .rmdp-range-hover.end span {
+      border-radius: 50% !important;
+      background-color: #7ea6f0 !important;
+      color: #fff !important;
+      width: 28px !important;
+    }
+
+    /* Submit button and modal success triggers */
+    .submit-btn {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      border: none;
+      color: white;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 1.05rem;
+      padding: 0.85rem 2rem;
+      border-radius: 14px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+      margin-top: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .submit-btn:hover {
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:active {
+      transform: translateY(1px);
+    }
+
+    /* Success Overlay Modal (Matches ResponseDetectionEngine) */
+    .modal-backdrop-custom {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-backdrop-custom.show {
+      display: flex;
+    }
+
+    .custom-modal-card {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      width: 100%;
+      max-width: 480px;
+      padding: 2.5rem;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transform: scale(0.9);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-backdrop-custom.show .custom-modal-card {
+      transform: scale(1);
+    }
+
+    .success-icon-wrap {
+      width: 72px;
+      height: 72px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 2px solid rgba(16, 185, 129, 0.4);
+      color: #10b981;
+      font-size: 2.25rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+    }
+
+    .receipt-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.6rem;
+      color: #fff;
+      margin-bottom: 0.75rem;
+    }
+
+    .success-desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+
+    .summary-list {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+      text-align: left;
+      font-size: 0.85rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      padding-bottom: 0.5rem;
+    }
+
+    .summary-item:last-child {
+      margin-bottom: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .summary-key {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .summary-val {
+      color: #fff;
+      font-family: monospace;
+      font-weight: bold;
+    }
+
+    .close-modal-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      padding: 0.65rem 1.75rem;
+      border-radius: 10px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .close-modal-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sandbox-container">
+    <div class="glass-card">
+      
+      <!-- Brand Header -->
+      <div class="brand-header">
+        <div class="brand-logo">
+          <div class="brand-logo-icon">
+            <i class="fa fa-university"></i>
+          </div>
+          <div>
+            <h1 class="brand-title">Kisan Rin Portal</h1>
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500; margin-top: 2px;">
+              Government of India Interest Subvention Scheme
+            </div>
+          </div>
+        </div>
+        <div class="sandbox-tag">RMDP Sandbox</div>
+      </div>
+
+      <!-- Instruction Panel -->
+      <div class="mb-4 p-3 rounded" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.85rem; line-height: 1.6; color: var(--text-muted);">
+        <strong style="color: var(--text-main);"><i class="fa fa-info-circle" style="color: var(--accent);"></i> Automation Simulator Notes:</strong>
+        <ul class="mb-0 mt-1 pl-3">
+          <li>All fields utilize the React Multi Date Picker (RMDP) container structure.</li>
+          <li>Dates are stored in local Javascript controller state and synchronized. Manual value overrides on the DOM element do not affect the internal calendar selection.</li>
+          <li>Supports month navigation via Year/Month fast picker panels (clicking month/year header text) and standard arrow-click increments.</li>
+        </ul>
+      </div>
+
+      <!-- Form Inputs -->
+      <form id="kisan-form" onsubmit="handleFormSubmit(event)">
+        <div class="row">
+          
+          <!-- Application Date -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="application-date">Application Date</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="application-date" name="application-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD" readonly>
+                <i class="fa fa-calendar"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- DOB -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="dob">DOB</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="dob" name="dob" class="form-control rmdp-input" placeholder="YYYY/MM/DD" readonly>
+                <i class="fa fa-birthday-cake"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loan Date -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="loan-date">Loan Date</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="loan-date" name="loan-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD" readonly>
+                <i class="fa fa-money"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Claim Date -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="claim-date">Claim Date</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="claim-date" name="claim-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD" readonly>
+                <i class="fa fa-tag"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Insurance Date -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="insurance-date">Insurance Date</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="insurance-date" name="insurance-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD" readonly>
+                <i class="fa fa-shield"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Range Date Picker -->
+          <div class="col-md-6 mb-4">
+            <label class="form-label" for="range-date">Range Date Picker</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="range-date" name="range-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD - YYYY/MM/DD" readonly>
+                <i class="fa fa-arrows-h"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Multi Date Picker -->
+          <div class="col-md-12 mb-4">
+            <label class="form-label" for="multi-date">Multi Date Picker</label>
+            <div class="rmdp-container">
+              <div class="input-wrapper">
+                <input type="text" id="multi-date" name="multi-date" class="form-control rmdp-input" placeholder="YYYY/MM/DD, YYYY/MM/DD" readonly>
+                <i class="fa fa-list"></i>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Submit Panel -->
+        <div class="d-flex justify-content-end align-items-center mt-3">
+          <button type="submit" class="submit-btn" id="btn-submit">
+            <i class="fa fa-paper-plane"></i> Submit Details
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Success Confirmation Overlay Modal (Replicates production validation outcomes) -->
+  <div class="modal-backdrop-custom modal fade" id="success-modal">
+    <div class="custom-modal-card success modal-content">
+      <div class="success-icon-wrap">
+        <i class="fa fa-check-circle"></i>
+      </div>
+      <h3 class="modal-title receipt-title">Registered Successfully</h3>
+      <p class="success-desc">
+        The Interest Subvention Scheme application has been logged on the national Kisan Rin Portal clearance register.
+      </p>
+      
+      <!-- Live Submission Summary -->
+      <div class="summary-list" id="modal-summary">
+        <!-- Injected by JavaScript -->
+      </div>
+      
+      <div>
+        <button class="close-modal-btn" id="btn-close-modal" onclick="closeSuccessModal()">
+          Close Sandbox
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript RMDP Simulator Component -->
+  <script>
+    const MONTH_NAMES = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    class RMDPInstance {
+      constructor(inputEl, options = {}) {
+        this.inputEl = inputEl;
+        this.type = options.type || "single"; // "single", "multi", "range"
+        this.selectedDates = []; // Array of local Date objects
+        this.currentMonth = new Date().getMonth();
+        this.currentYear = new Date().getFullYear();
+        this.view = "calendar"; // "calendar", "month", "year"
+        this.wrapper = null;
+        this.hoveredDate = null;
+        this.openTimeoutId = null;
+        
+        this.init();
+      }
+
+      init() {
+        this.inputEl.addEventListener("focus", (e) => this.onFocus(e));
+        this.inputEl.addEventListener("click", (e) => this.onClick(e));
+        
+        // Block manual typings completely
+        this.inputEl.addEventListener("keydown", (e) => {
+          if (e.key !== "Tab" && e.key !== "Escape" && e.key !== "Enter") {
+            e.preventDefault();
+          }
+        });
+      }
+
+      onFocus(e) {
+        this.open();
+      }
+
+      onClick(e) {
+        this.open();
+      }
+
+      open() {
+        if (this.wrapper) return;
+
+        // Close all other open date pickers first
+        RMDPInstance.closeAll();
+
+        // Create the absolute wrapper
+        this.wrapper = document.createElement("div");
+        this.wrapper.className = "rmdp-wrapper rmdp-shadow rmdp-border";
+        this.wrapper.style.position = "absolute";
+        this.wrapper.style.top = "105%";
+        this.wrapper.style.left = "0";
+        this.wrapper.style.zIndex = "99999";
+
+        // Append to the container element
+        const container = this.inputEl.closest(".rmdp-container");
+        if (!container) {
+          // Container not found — abort open
+          this.wrapper.remove();
+          this.wrapper = null;
+          return;
+        }
+        container.appendChild(this.wrapper);
+
+        // Keep reference of current instance globally for outside-click logic
+        RMDPInstance.activeInstance = this;
+
+        this.render();
+
+        // Listeners
+        this.outsideClickListener = (e) => {
+          if (!this.wrapper) {
+            document.removeEventListener("mousedown", this.outsideClickListener);
+            return;
+          }
+          if (container && !container.contains(e.target) && !this.wrapper.contains(e.target)) {
+            this.close();
+          }
+        };
+        // Use timeout to prevent immediate execution on the opening click event
+        this.openTimeoutId = setTimeout(() => {
+          document.addEventListener("mousedown", this.outsideClickListener);
+        }, 10);
+
+        this.escListener = (e) => {
+          if (e.key === "Escape") {
+            this.close();
+          }
+        };
+        document.addEventListener("keydown", this.escListener);
+        
+        this.inputEl.dispatchEvent(new Event("focus", { bubbles: true }));
+      }
+
+      close() {
+        if (this.openTimeoutId) {
+          clearTimeout(this.openTimeoutId);
+          this.openTimeoutId = null;
+        }
+        if (!this.wrapper) return;
+        this.wrapper.remove();
+        this.wrapper = null;
+        
+        document.removeEventListener("mousedown", this.outsideClickListener);
+        document.removeEventListener("keydown", this.escListener);
+
+        if (RMDPInstance.activeInstance === this) {
+          RMDPInstance.activeInstance = null;
+        }
+
+        this.inputEl.dispatchEvent(new Event("blur", { bubbles: true }));
+      }
+
+      static closeAll() {
+        if (RMDPInstance.activeInstance) {
+          RMDPInstance.activeInstance.close();
+        }
+      }
+
+      toggleView(targetView) {
+        if (this.view === targetView) {
+          this.view = "calendar";
+        } else {
+          this.view = targetView;
+        }
+        this.render();
+      }
+
+      navigateMonth(direction) {
+        if (this.view === "calendar") {
+          this.currentMonth += direction;
+          if (this.currentMonth < 0) {
+            this.currentMonth = 11;
+            this.currentYear--;
+          } else if (this.currentMonth > 11) {
+            this.currentMonth = 0;
+            this.currentYear++;
+          }
+        } else if (this.view === "year") {
+          this.currentYear += direction * 12;
+        } else if (this.view === "month") {
+          this.currentYear += direction;
+        }
+        this.render();
+      }
+
+      isDateSelected(date) {
+        return this.selectedDates.some(
+          (d) => d.getDate() === date.getDate() && 
+                 d.getMonth() === date.getMonth() && 
+                 d.getFullYear() === date.getFullYear()
+        );
+      }
+
+      isDateInHoverRange(date) {
+        if (this.type !== "range" || this.selectedDates.length !== 1 || !this.hoveredDate) return false;
+        
+        const start = this.selectedDates[0];
+        const end = this.hoveredDate;
+        
+        if (start < end) {
+          return date >= start && date <= end;
+        } else {
+          return date >= end && date <= start;
+        }
+      }
+
+      selectDate(date) {
+        if (this.type === "single") {
+          this.selectedDates = [date];
+          this.updateInputValue();
+          this.close();
+        } else if (this.type === "multi") {
+          const idx = this.selectedDates.findIndex(
+            (d) => d.getDate() === date.getDate() && 
+                   d.getMonth() === date.getMonth() && 
+                   d.getFullYear() === date.getFullYear()
+          );
+          if (idx > -1) {
+            this.selectedDates.splice(idx, 1);
+          } else {
+            this.selectedDates.push(date);
+          }
+          this.updateInputValue();
+          this.render();
+        } else if (this.type === "range") {
+          if (this.selectedDates.length === 0 || this.selectedDates.length === 2) {
+            this.selectedDates = [date];
+          } else {
+            const first = this.selectedDates[0];
+            if (date < first) {
+              this.selectedDates = [date, first];
+            } else {
+              this.selectedDates.push(date);
+            }
+            this.close();
+          }
+          this.updateInputValue();
+          this.render();
+        }
+      }
+
+      updateInputValue() {
+        let val = "";
+        const formatDateString = (d) => {
+          return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+        };
+
+        if (this.type === "single" && this.selectedDates[0]) {
+          val = formatDateString(this.selectedDates[0]);
+        } else if (this.type === "multi") {
+          val = this.selectedDates.map(formatDateString).join(", ");
+        } else if (this.type === "range") {
+          if (this.selectedDates[0] && this.selectedDates[1]) {
+            val = `${formatDateString(this.selectedDates[0])} - ${formatDateString(this.selectedDates[1])}`;
+          } else if (this.selectedDates[0]) {
+            val = formatDateString(this.selectedDates[0]);
+          }
+        }
+
+        this.inputEl.value = val;
+        this.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+        this.inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      render() {
+        if (!this.wrapper) return;
+        this.wrapper.innerHTML = "";
+
+        const calendar = document.createElement("div");
+        calendar.className = "rmdp-calendar";
+
+        // 1. Header
+        const header = document.createElement("div");
+        header.className = "rmdp-header";
+
+        const prevBtn = document.createElement("div");
+        prevBtn.className = "rmdp-arrow-container rmdp-left";
+        prevBtn.innerHTML = '<i class="rmdp-arrow"></i>';
+        prevBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.navigateMonth(-1);
+        };
+
+        const headerValues = document.createElement("div");
+        headerValues.className = "rmdp-header-values";
+        
+        // Exact replication of 2-span header structure queried by RmdpAdapter
+        const monthSpan = document.createElement("span");
+        monthSpan.textContent = MONTH_NAMES[this.currentMonth];
+        monthSpan.onclick = (e) => {
+          e.stopPropagation();
+          this.toggleView("month");
+        };
+
+        const yearSpan = document.createElement("span");
+        yearSpan.textContent = String(this.currentYear);
+        yearSpan.onclick = (e) => {
+          e.stopPropagation();
+          this.toggleView("year");
+        };
+
+        headerValues.appendChild(monthSpan);
+        headerValues.appendChild(yearSpan);
+
+        const nextBtn = document.createElement("div");
+        nextBtn.className = "rmdp-arrow-container rmdp-right";
+        nextBtn.innerHTML = '<i class="rmdp-arrow"></i>';
+        nextBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.navigateMonth(1);
+        };
+
+        header.appendChild(prevBtn);
+        header.appendChild(headerValues);
+        header.appendChild(nextBtn);
+        calendar.appendChild(header);
+
+        // 2. Day Picker Grid View
+        if (this.view === "calendar") {
+          const dayPicker = document.createElement("div");
+          dayPicker.className = "rmdp-day-picker";
+
+          // Week header
+          const weekHeader = document.createElement("div");
+          weekHeader.className = "rmdp-week";
+          const weekDays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+          for (const wd of weekDays) {
+            const wdEl = document.createElement("div");
+            wdEl.className = "rmdp-week-day";
+            wdEl.textContent = wd;
+            weekHeader.appendChild(wdEl);
+          }
+          dayPicker.appendChild(weekHeader);
+
+          // Calendar days calculation
+          const firstDayIndex = new Date(this.currentYear, this.currentMonth, 1).getDay();
+          const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
+          const daysInPrevMonth = new Date(this.currentYear, this.currentMonth, 0).getDate();
+
+          let dayNum = 1;
+          let nextMonthDayNum = 1;
+
+          for (let w = 0; w < 6; w++) {
+            const weekRow = document.createElement("div");
+            weekRow.className = "rmdp-week";
+
+            for (let d = 0; d < 7; d++) {
+              const cell = document.createElement("div");
+              cell.className = "rmdp-day";
+              const span = document.createElement("span");
+              cell.appendChild(span);
+
+              const index = w * 7 + d;
+              if (index < firstDayIndex) {
+                cell.classList.add("rmdp-deactive");
+                span.textContent = String(daysInPrevMonth - firstDayIndex + index + 1);
+              } else if (dayNum > daysInMonth) {
+                cell.classList.add("rmdp-deactive");
+                span.textContent = String(nextMonthDayNum++);
+              } else {
+                const currentDayVal = dayNum;
+                span.textContent = String(currentDayVal);
+                
+                const cellDate = new Date(this.currentYear, this.currentMonth, currentDayVal);
+                
+                // Styling hooks
+                if (this.isDateSelected(cellDate)) {
+                  cell.classList.add("rmdp-selected");
+                }
+                
+                const today = new Date();
+                if (cellDate.getDate() === today.getDate() && 
+                    cellDate.getMonth() === today.getMonth() && 
+                    cellDate.getFullYear() === today.getFullYear()) {
+                  cell.classList.add("rmdp-today");
+                }
+
+                // Range picker highlights
+                if (this.type === "range") {
+                  if (this.isDateSelected(cellDate)) {
+                    cell.classList.add("rmdp-range");
+                    if (this.selectedDates.length === 2) {
+                      if (cellDate.getTime() === this.selectedDates[0].getTime()) cell.classList.add("start");
+                      if (cellDate.getTime() === this.selectedDates[1].getTime()) cell.classList.add("end");
+                    } else if (this.selectedDates.length === 1) {
+                      cell.classList.add("start", "end");
+                    }
+                  } else if (this.selectedDates.length === 2 && 
+                             cellDate > this.selectedDates[0] && 
+                             cellDate < this.selectedDates[1]) {
+                    cell.classList.add("rmdp-range");
+                  } else if (this.isDateInHoverRange(cellDate)) {
+                    cell.classList.add("rmdp-range-hover");
+                    const start = this.selectedDates[0];
+                    const end = this.hoveredDate;
+                    if (start < end) {
+                      if (cellDate.getTime() === end.getTime()) cell.classList.add("end");
+                    } else {
+                      if (cellDate.getTime() === end.getTime()) cell.classList.add("start");
+                    }
+                  }
+                }
+
+                // Event actions
+                cell.onclick = (e) => {
+                  e.stopPropagation();
+                  this.selectDate(cellDate);
+                };
+
+                if (this.type === "range" && this.selectedDates.length === 1) {
+                  cell.onmouseenter = () => {
+                    this.hoveredDate = cellDate;
+                    this.render();
+                  };
+                }
+
+                dayNum++;
+              }
+              weekRow.appendChild(cell);
+            }
+            dayPicker.appendChild(weekRow);
+          }
+          calendar.appendChild(dayPicker);
+        }
+
+        // 3. Month Picker Overlay
+        else if (this.view === "month") {
+          const monthPicker = document.createElement("div");
+          monthPicker.className = "rmdp-month-picker";
+
+          const rows = [
+            ["January", "February", "March", "April"],
+            ["May", "June", "July", "August"],
+            ["September", "October", "November", "December"]
+          ];
+
+          for (const row of rows) {
+            const ymRow = document.createElement("div");
+            ymRow.className = "rmdp-ym";
+
+            for (const name of row) {
+              const mCell = document.createElement("div");
+              mCell.className = "rmdp-day";
+              const span = document.createElement("span");
+              span.textContent = name;
+              mCell.appendChild(span);
+
+              const mIndex = MONTH_NAMES.indexOf(name);
+              if (mIndex === this.currentMonth) {
+                mCell.classList.add("rmdp-selected");
+              }
+
+              mCell.onclick = (e) => {
+                e.stopPropagation();
+                this.currentMonth = mIndex;
+                this.view = "calendar";
+                this.render();
+              };
+
+              ymRow.appendChild(mCell);
+            }
+            monthPicker.appendChild(ymRow);
+          }
+          calendar.appendChild(monthPicker);
+        }
+
+        // 4. Year Picker Overlay
+        else if (this.view === "year") {
+          const yearPicker = document.createElement("div");
+          yearPicker.className = "rmdp-year-picker";
+
+          const startYear = this.currentYear - 4;
+
+          for (let r = 0; r < 3; r++) {
+            const ymRow = document.createElement("div");
+            ymRow.className = "rmdp-ym";
+
+            for (let c = 0; c < 4; c++) {
+              const yVal = startYear + r * 4 + c;
+              const yCell = document.createElement("div");
+              yCell.className = "rmdp-day";
+              const span = document.createElement("span");
+              span.textContent = String(yVal);
+              yCell.appendChild(span);
+
+              if (yVal === this.currentYear) {
+                yCell.classList.add("rmdp-selected");
+              }
+
+              yCell.onclick = (e) => {
+                e.stopPropagation();
+                this.currentYear = yVal;
+                this.view = "month";
+                this.render();
+              };
+
+              ymRow.appendChild(yCell);
+            }
+            yearPicker.appendChild(ymRow);
+          }
+          calendar.appendChild(yearPicker);
+        }
+
+        this.wrapper.appendChild(calendar);
+      }
+    }
+
+    RMDPInstance.activeInstance = null;
+
+    // Attach RMDP instances on DOM load
+    document.addEventListener("DOMContentLoaded", () => {
+      new RMDPInstance(document.getElementById("application-date"), { type: "single" });
+      new RMDPInstance(document.getElementById("dob"), { type: "single" });
+      new RMDPInstance(document.getElementById("loan-date"), { type: "single" });
+      new RMDPInstance(document.getElementById("claim-date"), { type: "single" });
+      new RMDPInstance(document.getElementById("insurance-date"), { type: "single" });
+      new RMDPInstance(document.getElementById("range-date"), { type: "range" });
+      new RMDPInstance(document.getElementById("multi-date"), { type: "multi" });
+    });
+
+    // Form Submission Actions
+    function handleFormSubmit(event) {
+      event.preventDefault();
+      
+      const form = document.getElementById("kisan-form");
+      const inputs = form.querySelectorAll(".rmdp-input");
+      const summaryDiv = document.getElementById("modal-summary");
+      summaryDiv.innerHTML = "";
+
+      let allFilled = true;
+      inputs.forEach(input => {
+        if (!input.value.trim()) {
+          allFilled = false;
+          input.classList.add("is-invalid");
+          
+          // Inject custom inline error for ResponseDetectionEngine scan
+          let parent = input.closest(".input-wrapper");
+          let err = parent.querySelector(".invalid-feedback");
+          if (!err) {
+            err = document.createElement("div");
+            err.className = "invalid-feedback error-message";
+            err.style.display = "block";
+            err.textContent = `${input.previousElementSibling?.textContent || input.name || "Field"} is required.`;
+            parent.appendChild(err);
+          }
+        } else {
+          input.classList.remove("is-invalid");
+          const parent = input.closest(".input-wrapper");
+          const err = parent.querySelector(".invalid-feedback");
+          if (err) err.remove();
+        }
+      });
+
+      if (!allFilled) return;
+
+      // Build values summary for receipt
+      inputs.forEach(input => {
+        const row = document.createElement("div");
+        row.className = "summary-item";
+        
+        const label = input.closest(".mb-4").querySelector(".form-label").textContent;
+        
+        row.innerHTML = `
+          <span class="summary-key">${label}</span>
+          <span class="summary-val">${input.value}</span>
+        `;
+        summaryDiv.appendChild(row);
+      });
+
+      // Show receipt modal
+      const modal = document.getElementById("success-modal");
+      modal.classList.add("show");
+      modal.classList.add("receipt-active");
+    }
+
+    function closeSuccessModal() {
+      const modal = document.getElementById("success-modal");
+      modal.classList.remove("show");
+      modal.classList.remove("receipt-active");
+      document.getElementById("kisan-form").reset();
+    }
+  </script>
+</body>
+</html>

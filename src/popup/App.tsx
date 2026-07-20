@@ -37,12 +37,10 @@ export const App: React.FC = () => {
   );
 
   // 2. Select appropriate component based on active navigation tab
+  // 2. Select appropriate component based on active navigation tab
   const renderScreen = () => {
     if (isRecording) {
       return <RecordingScreen />;
-    }
-    if (isExecutionActive) {
-      return <RunScreen />;
     }
 
     switch (activeTab) {
@@ -57,12 +55,12 @@ export const App: React.FC = () => {
       case 'settings':
         return <SettingsScreen />;
       default:
-        return <HomeScreen />;
+        return isExecutionActive ? <RunScreen /> : <HomeScreen />;
     }
   };
 
   // Nav labels
-  const navItems: { tab: TabType; label: string; icon: React.ReactNode }[] = [
+  const navItems: { tab: TabType; label: string; icon: React.ReactNode; badge?: string }[] = [
     { 
       tab: 'home', 
       label: 'Home Dashboard',
@@ -72,6 +70,17 @@ export const App: React.FC = () => {
         </svg>
       )
     },
+    ...(isExecutionActive ? [{
+      tab: 'run' as TabType,
+      label: 'Active Automation',
+      badge: 'RUNNING',
+      icon: (
+        <svg className="w-5 h-5 text-emerald-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    }] : []),
     { 
       tab: 'data', 
       label: 'Data Mapping',
@@ -102,14 +111,14 @@ export const App: React.FC = () => {
     }
   ];
 
-  const hideNav = isRecording || isExecutionActive;
+  const hideNav = isRecording;
   const currentTheme = settings.theme || 'dark';
 
   const toggleTheme = () => {
     setTheme(currentTheme === 'dark' ? 'light' : 'dark');
   };
 
-  // Full screen viewport taking over when in recording or execution state
+  // Full screen viewport taking over when in recording state
   if (hideNav) {
     return (
       <div className="w-full h-screen overflow-hidden bg-fp-bg-light dark:bg-fp-bg-dark text-slate-900 dark:text-slate-100 transition-colors duration-300 flex flex-col">
@@ -150,14 +159,21 @@ export const App: React.FC = () => {
                 <button
                   key={item.tab}
                   onClick={() => setActiveTab(item.tab)}
-                  className={`w-full flex items-center gap-3 py-2.5 px-4 rounded-xl transition-all duration-200 text-sm font-semibold ${
+                  className={`w-full flex items-center justify-between py-2.5 px-4 rounded-xl transition-all duration-200 text-sm font-semibold ${
                     isActive 
                       ? 'text-white bg-white/10 shadow-sm' 
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {item.icon}
-                  <span className="font-outfit">{item.label}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {item.icon}
+                    <span className="font-outfit truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-[9px] font-bold text-emerald-400 font-mono tracking-wider animate-pulse shrink-0">
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

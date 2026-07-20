@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KRP Government Registration Portal</title>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --accent: #22d3ee;
+      --success: #10b981;
+      --danger: #ef4444;
+      --bg: #0f0f1a;
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.12);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      background-image: radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 80%, rgba(34,211,238,0.1) 0%, transparent 50%);
+    }
+
+    .portal-header {
+      width: 100%;
+      max-width: 720px;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .portal-header .badge {
+      display: inline-block;
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.4);
+      color: var(--primary);
+      padding: 4px 16px;
+      border-radius: 99px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .portal-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f1f5f9, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .portal-header p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    /* Step indicator */
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 32px;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    .step-dot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .step-dot .dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.3s ease;
+    }
+
+    .step-dot.active .dot {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      box-shadow: 0 0 20px rgba(99,102,241,0.5);
+    }
+
+    .step-dot.done .dot {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+
+    .step-dot .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .step-dot.active .label {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .step-connector {
+      height: 2px;
+      flex: 1;
+      background: var(--border);
+      margin-bottom: 22px;
+      transition: background 0.3s;
+    }
+
+    .step-connector.done { background: var(--success); }
+
+    /* Form card */
+    .form-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      width: 100%;
+      max-width: 720px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .section-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    select,
+    input[type="number"] {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+
+    select option { background: #1a1a2e; }
+
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .checkbox-group .check-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: normal;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 32px;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 13px 28px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(16,185,129,0.4);
+    }
+
+    /* Page sections */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* Receipt overlay */
+    #receipt-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(12px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #receipt-overlay.receipt-active {
+      display: flex;
+    }
+
+    .receipt-card {
+      background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(99,102,241,0.15));
+      border: 1px solid rgba(16,185,129,0.4);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+    }
+
+    .receipt-icon {
+      width: 72px;
+      height: 72px;
+      background: rgba(16,185,129,0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 32px;
+    }
+
+    .receipt-card h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--success);
+      margin-bottom: 8px;
+    }
+
+    .receipt-card p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .receipt-details {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+      margin-bottom: 24px;
+    }
+
+    .receipt-detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+
+    .receipt-detail-row .rk { color: var(--text-muted); }
+    .receipt-detail-row .rv { color: var(--text); font-weight: 600; }
+
+    .receipt-txn {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="portal-header">
+    <div class="badge">🏛 Government Portal</div>
+    <h1>KRP Registration Authority</h1>
+    <p>National Business & Agricultural Entity Registration System — v3.2.1</p>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="step-indicator" id="step-indicator">
+    <div class="step-dot active" id="dot-1">
+      <div class="dot">1</div>
+      <div class="label">Identity</div>
+    </div>
+    <div class="step-connector" id="conn-1"></div>
+    <div class="step-dot" id="dot-2">
+      <div class="dot">2</div>
+      <div class="label">Address</div>
+    </div>
+    <div class="step-connector" id="conn-2"></div>
+    <div class="step-dot" id="dot-3">
+      <div class="dot">3</div>
+      <div class="label">Entity</div>
+    </div>
+    <div class="step-connector" id="conn-3"></div>
+    <div class="step-dot" id="dot-4">
+      <div class="dot">4</div>
+      <div class="label">Declaration</div>
+    </div>
+  </div>
+
+  <div class="form-card">
+
+    <!-- STEP 1: Identity -->
+    <div class="page-section active" id="section-1">
+      <div class="section-title">Personal & Identity Details</div>
+      <div class="section-sub">Enter your official legal name and government-issued identity credentials</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="fullName">Full Legal Name</label>
+          <input type="text" id="fullName" name="fullName" placeholder="As per national ID document" />
+        </div>
+        <div class="form-group">
+          <label for="birthDate">Date of Birth</label>
+          <input type="date" id="birthDate" name="birthDate" />
+        </div>
+        <div class="form-group">
+          <label for="identityNumber">National ID Number</label>
+          <input type="text" id="identityNumber" name="identityNumber" placeholder="KRP-XXXX-XX" />
+        </div>
+        <div class="form-group full">
+          <label for="gender">Gender</label>
+          <select id="gender" name="gender">
+            <option value="">— Select Gender —</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+            <option value="Prefer not to say">Prefer not to say</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <span></span>
+        <button class="btn btn-primary" id="btn-next-1" onclick="nextStep(1)">Next Step →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Address -->
+    <div class="page-section" id="section-2">
+      <div class="section-title">Contact & Address Information</div>
+      <div class="section-sub">Provide your registered residential or business address</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="addressLine">Street Address</label>
+          <input type="text" id="addressLine" name="addressLine" placeholder="House No., Street, Colony / Area" />
+        </div>
+        <div class="form-group">
+          <label for="stateRegion">State / Province</label>
+          <select id="stateRegion" name="stateRegion">
+            <option value="">— Select State —</option>
+            <option value="North KRP">North KRP</option>
+            <option value="South KRP">South KRP</option>
+            <option value="West Valley">West Valley</option>
+            <option value="Capital District">Capital District</option>
+            <option value="East Province">East Province</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="postalCode">Postal Code / Zip</label>
+          <input type="text" id="postalCode" name="postalCode" placeholder="6-digit PIN" />
+        </div>
+        <div class="form-group full">
+          <label for="phoneNumber">Primary Contact Number</label>
+          <input type="text" id="phoneNumber" name="phoneNumber" placeholder="+91 XXXXX XXXXX" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="prevStep(2)">← Back</button>
+        <button class="btn btn-primary" id="btn-next-2" onclick="nextStep(2)">Next Step →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Entity -->
+    <div class="page-section" id="section-3">
+      <div class="section-title">Economic Entity Information</div>
+      <div class="section-sub">Describe your registered business or agricultural entity type and financials</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="entityType">Registration Entity Type</label>
+          <select id="entityType" name="entityType">
+            <option value="">— Select Entity Type —</option>
+            <option value="Agricultural Farmer">Agricultural Farmer</option>
+            <option value="MSME Small Enterprise">MSME Small Enterprise</option>
+            <option value="Independent Professional">Independent Professional</option>
+            <option value="Cooperative Society">Cooperative Society</option>
+            <option value="Non-Profit Trust">Non-Profit Trust</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="landHolding">Land Holding / Office Size (Acres)</label>
+          <input type="number" id="landHolding" name="landHolding" placeholder="e.g., 5.5" step="0.1" min="0" />
+        </div>
+        <div class="form-group">
+          <label for="annualRevenue">Estimated Annual Revenue (KRP Credit)</label>
+          <select id="annualRevenue" name="annualRevenue">
+            <option value="">— Select Range —</option>
+            <option value="Under 50,000">Under 50,000</option>
+            <option value="50,000 - 250,000">50,000 - 250,000</option>
+            <option value="Above 250,000">Above 250,000</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="prevStep(3)">← Back</button>
+        <button class="btn btn-primary" id="btn-next-3" onclick="nextStep(3)">Next Step →</button>
+      </div>
+    </div>
+
+    <!-- STEP 4: Declaration -->
+    <div class="page-section" id="section-4">
+      <div class="section-title">Audit & Regulatory Declarations</div>
+      <div class="section-sub">Review terms and provide your digital signature acknowledgment to complete registration</div>
+      <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 20px; margin-bottom: 24px; font-size: 13px; color: var(--text-muted); line-height: 1.7;">
+        By submitting this form, I hereby declare that all information provided is accurate and complete to the best of my knowledge. I consent to verification by the KRP Registration Authority and acknowledge that any false statements may lead to legal proceedings under the KRP National Economic Regulation Act, Section 47-B.
+      </div>
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="auditConsent" name="auditConsent" />
+          <label class="check-label" for="auditConsent">
+            I consent to audit by the KRP Government Authority and confirm all submitted information is accurate and truthful.
+          </label>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: 20px;">
+        <label for="declarationSignature">Signature Acknowledgment</label>
+        <input type="text" id="declarationSignature" name="declarationSignature" placeholder="Type your full legal name to sign" />
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="prevStep(4)">← Back</button>
+        <button class="btn btn-success" id="btn-submit" onclick="submitForm()">✓ Submit Registration</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Success Receipt Overlay -->
+  <div id="receipt-overlay">
+    <div class="receipt-card">
+      <div class="receipt-icon">✅</div>
+      <h2>Government Clearance Approved</h2>
+      <p>Your KRP registration has been successfully submitted and verified.</p>
+      <div class="receipt-details" id="receipt-details">
+        <!-- Populated by JS -->
+      </div>
+      <p class="receipt-txn" id="receipt-txn"></p>
+      <button class="btn btn-success" onclick="closeReceipt()" style="width:100%; margin-top: 8px;">Complete Process ✓</button>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    function updateStepIndicator(step) {
+      for (let i = 1; i <= totalSteps; i++) {
+        const dot = document.getElementById('dot-' + i);
+        dot.classList.remove('active', 'done');
+        if (i < step) dot.classList.add('done');
+        else if (i === step) dot.classList.add('active');
+
+        if (i < totalSteps) {
+          const conn = document.getElementById('conn-' + i);
+          conn.classList.toggle('done', i < step);
+        }
+      }
+    }
+
+    function nextStep(from) {
+      const currentSection = document.getElementById('section-' + from);
+      const nextSection = document.getElementById('section-' + (from + 1));
+      if (!nextSection) return;
+      currentSection.classList.remove('active');
+      nextSection.classList.add('active');
+      currentStep = from + 1;
+      updateStepIndicator(currentStep);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function prevStep(from) {
+      const currentSection = document.getElementById('section-' + from);
+      const prevSection = document.getElementById('section-' + (from - 1));
+      if (!prevSection) return;
+      currentSection.classList.remove('active');
+      prevSection.classList.add('active');
+      currentStep = from - 1;
+      updateStepIndicator(currentStep);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function submitForm() {
+      // Collect values
+      const name = document.getElementById('fullName').value || 'N/A';
+      const dob = document.getElementById('birthDate').value || 'N/A';
+      const idNum = document.getElementById('identityNumber').value || 'N/A';
+      const entity = document.getElementById('entityType').value || 'N/A';
+      const txnHash = 'KRP-TXN-' + Math.random().toString(36).substr(2, 12).toUpperCase();
+
+      // Populate receipt
+      const detailsEl = document.getElementById('receipt-details');
+      detailsEl.innerHTML = `
+        <div class="receipt-detail-row"><span class="rk">Registrant</span><span class="rv">${name}</span></div>
+        <div class="receipt-detail-row"><span class="rk">Date of Birth</span><span class="rv">${dob}</span></div>
+        <div class="receipt-detail-row"><span class="rk">National ID</span><span class="rv">${idNum}</span></div>
+        <div class="receipt-detail-row"><span class="rk">Entity Type</span><span class="rv">${entity}</span></div>
+        <div class="receipt-detail-row"><span class="rk">Status</span><span class="rv" style="color: var(--success);">APPROVED ✓</span></div>
+      `;
+      document.getElementById('receipt-txn').textContent = 'Transaction: ' + txnHash;
+
+      // Show overlay
+      const overlay = document.getElementById('receipt-overlay');
+      overlay.classList.add('receipt-active');
+    }
+
+    function closeReceipt() {
+      // Hide the receipt overlay and reset the form for the next row
+      const overlay = document.getElementById('receipt-overlay');
+      overlay.classList.remove('receipt-active');
+
+      // Reset all form fields
+      document.getElementById('fullName').value = '';
+      document.getElementById('birthDate').value = '';
+      document.getElementById('identityNumber').value = '';
+      document.getElementById('gender').value = '';
+      document.getElementById('addressLine').value = '';
+      document.getElementById('stateRegion').value = '';
+      document.getElementById('postalCode').value = '';
+      document.getElementById('phoneNumber').value = '';
+      document.getElementById('entityType').value = '';
+      document.getElementById('landHolding').value = '';
+      document.getElementById('annualRevenue').value = '';
+      document.getElementById('auditConsent').checked = false;
+      document.getElementById('declarationSignature').value = '';
+
+      // Navigate back to step 1
+      for (let i = 1; i <= totalSteps; i++) {
+        const s = document.getElementById('section-' + i);
+        s.classList.toggle('active', i === 1);
+      }
+      currentStep = 1;
+      updateStepIndicator(1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

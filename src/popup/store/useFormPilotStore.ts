@@ -136,16 +136,6 @@ export const useFormPilotStore = create<FormPilotStoreState>((set, get) => {
             if (message.payload?.state) {
               const newState = message.payload.state as ExecutionState;
               set({ executionState: newState });
-              
-              if (
-                newState.status === ExecutionStatus.RUNNING || 
-                newState.status === ExecutionStatus.PAUSED || 
-                newState.status === ExecutionStatus.CAPTCHA_PAUSED ||
-                newState.status === ExecutionStatus.STARTING
-              ) {
-                set({ activeTab: 'run' });
-              }
-
               get().loadLogs(newState.sessionId);
             }
             break;

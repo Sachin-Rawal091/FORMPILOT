@@ -7,6 +7,11 @@ const CURRENT_KEY_VERSION = 1;
 const KEYS_STORE = 'keys';
 const KEY_ID = 'fpDataKey';
 
+// Cached at module scope so repeated encrypt/decrypt calls within the same
+// process (tests, or any non-IndexedDB context) round-trip against the same
+// key instead of each generating a throwaway one.
+let ephemeralKeyPromise: Promise<CryptoKey> | null = null;
+
 export class KeyVersionMismatchError extends Error {
   constructor(found: number, expected: number) {
     super(`Encrypted record has keyVersion ${found}, current scheme is ${expected}.`);
@@ -22,9 +27,13 @@ export class KeyVersionMismatchError extends Error {
 // tries to pull raw bytes out of it — it only ever exists as an opaque
 // Web Crypto handle.
 async function getOrCreateKey(): Promise<CryptoKey> {
-  if (typeof indexedDB === 'undefined') {
-    // Test/non-browser environment — ephemeral in-memory key only.
-    return crypto.subtle.generateKey({ name: KEY_ALGO, length: KEY_LEN }, true, ['encrypt', 'decrypt']);
+  if (typeof indexedDB === 'undefined' || (typeof process !== 'undefined' && process.env.VITEST === 'true')) {
+    // Test/non-browser environment — ephemeral in-memory key, cached for the
+    // life of the process so encrypt/decrypt pairs actually round-trip.
+    if (!ephemeralKeyPromise) {
+      ephemeralKeyPromise = crypto.subtle.generateKey({ name: KEY_ALGO, length: KEY_LEN }, true, ['encrypt', 'decrypt']);
+    }
+    return ephemeralKeyPromise;
   }
 
   const db = await getDB();

@@ -8,6 +8,18 @@ import { sanitizeTextValue } from "../../utils/sanitize";
 import { DatePickerEngine } from "../datepickers/DatePickerEngine";
 import { DatePickerRegistry } from "../datepickers/DatePickerRegistry";
 
+// Exposed so tests can disable the real-world settle/verification wait without
+// ExecutionEngine needing to know it's running under a test runner. Defaults to
+// enabled; test setup (e.g. a global beforeEach) can flip this off explicitly.
+export let ENABLE_ACTION_SETTLE_WAIT = true;
+
+export function disableActionSettleWait() {
+  ENABLE_ACTION_SETTLE_WAIT = false;
+}
+export function enableActionSettleWait() {
+  ENABLE_ACTION_SETTLE_WAIT = true;
+}
+
 export interface ResolvedValueResult {
   value: string | null;
   status: LogStatus;
@@ -180,8 +192,7 @@ export class ExecutionEngine {
 
         dispatchEvents(el, ["mousedown", "mouseup", "click"]);
 
-        const isClickTest = typeof process !== 'undefined' && process.env.VITEST === 'true';
-        if (!isClickTest && (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button')) {
+        if (ENABLE_ACTION_SETTLE_WAIT && (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button')) {
           const start = Date.now();
           while (Date.now() - start < 500) {
             if (window.location.href !== beforeClickUrl || clickMutationObserved) {
@@ -412,8 +423,7 @@ export class ExecutionEngine {
           dispatchEvents(el, ["mousedown", "mouseup", "click"]);
         }
 
-        const isSubmitTest = typeof process !== 'undefined' && process.env.VITEST === 'true';
-        if (!isSubmitTest) {
+        if (ENABLE_ACTION_SETTLE_WAIT) {
           const start = Date.now();
           while (Date.now() - start < 1000) {
             if (window.location.href !== beforeSubmitUrl || submitMutationObserved) {

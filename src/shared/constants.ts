@@ -7,6 +7,7 @@ export const WAIT_NETWORK_IDLE_TIMEOUT = 5000;
 export const WAIT_URL_CHANGE_TIMEOUT = 15000;
 export const NAVIGATION_TIMEOUT = 30000;
 export const STEP_HARD_TIMEOUT = 30000;
+export const MESSAGE_RETRY_TIMEOUT_MS = 3000;
 
 export const NETWORK_IDLE_CEILING = 8000;
 export const NAVIGATION_DOM_THRESHOLD = 0.4;
@@ -44,7 +45,6 @@ export const XPATH_MAX_DEPTH = 10;
 // Excel
 export const EXCEL_HEADER_SCAN_ROWS = 5;
 export const EXCEL_FUZZY_MAX_DISTANCE = 2;
-export const EXCEL_EMPTY_ROW_THRESHOLD = 0.8;
 export const EXCEL_CHUNK_SIZE = 50;
 
 // Storage
@@ -62,6 +62,13 @@ export const GENERIC_DATEPICKER_MAX_DISTANCE_PX = 600;
 // Submit Verification Engine
 export const MAX_SUBMIT_RETRIES = 1;
 export const SUBMIT_RETRY_SETTLE_MS = 2000;
+
+// Form-reset-between-rows (executor.ts resetFormBetweenRows / dismissSuccessUI)
+export const POST_DISMISS_RESET_WAIT_MS = 1500;
+export const FORM_READY_RETRY_STEP_MS = 500; // multiplied by attempt number for progressive backoff
+export const MODAL_DISMISS_CLICK_SETTLE_MS = 500;
+export const MODAL_ESCAPE_SETTLE_MS = 300;
+
 
 
 

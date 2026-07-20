@@ -105,41 +105,47 @@ FormPilot_RecordingEngine_Fix_Plan.md
 *[Pp]lan*.md
 bugFind.md
 
-# --- Local Sandbox & Test Scripts ---
-# Mock portals and local servers used only for offline sandbox testing
-debug_dates.cjs
-job_portal.html
-krp_portal.html
-student_portal.html
-rmdp_sandbox.html
-server.js
-test-extension.js
-run_live_demo.js
-run_live_demo_v2.js
-run_live_demo_v3.js
-verify_automation_live.js
-verify_flow_live.js
-verify_job_flow_live.js
-verify_same_tab_automation.js
-generate_job_excel.js
-generate_krp_excel.js
-generate_rmdp_excel.js
-generate_student_excel.js
-package_zip.js
-print_execution_logs.js
-record_and_print_steps.js
-verify_job_automation_live.js
-verify_rmdp_automation_live.js
-verify_student_automation_live.js
-create_demo_gif.js
+# --- Local Root Sandbox & Temp Files ---
+# Ignore temporary sandbox/demo files created directly in root
+/debug_dates.cjs
+/job_portal.html
+/krp_portal.html
+/student_portal.html
+/rmdp_sandbox.html
+/server.js
+/test-extension.js
+/run_live_demo.js
+/run_live_demo_v2.js
+/run_live_demo_v3.js
+/verify_automation_live.js
+/verify_flow_live.js
+/verify_job_flow_live.js
+/verify_same_tab_automation.js
+/generate_job_excel.js
+/generate_krp_excel.js
+/generate_rmdp_excel.js
+/generate_student_excel.js
+/package_zip.js
+/print_execution_logs.js
+/record_and_print_steps.js
+/verify_job_automation_live.js
+/verify_rmdp_automation_live.js
+/verify_student_automation_live.js
+/create_demo_gif.js
 
-# General wildcards for local portal mockups and test/demo scripts
-*_portal.html
-*_sandbox.html
-verify_*_live.js
-verify_*_automation.js
-generate_*_excel.js
-run_live_demo*.js
+# General wildcards for local portal mockups and test/demo scripts in root
+/*_portal.html
+/*_sandbox.html
+/verify_*_live.js
+/verify_*_automation.js
+/generate_*_excel.js
+/run_live_demo*.js
+
+# --- Project Test Scripts & Fixtures Directories ---
+!/scripts/
+!/scripts/**
+!/fixtures/
+!/fixtures/**
 
 
 # --- Agent Protocol Files ---
@@ -155,6 +161,9 @@ agent_handoff.md
 *.xls
 *.csv
 ~$*
+!/fixtures/*.xlsx
+!/fixtures/*.xls
+!/fixtures/*.csv
 
 # --- Screenshots & Media Artifacts ---
 live_demo_screenshots/

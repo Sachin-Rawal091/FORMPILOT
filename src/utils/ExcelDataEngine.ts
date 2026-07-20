@@ -1,7 +1,6 @@
 import { ExcelRow, RowStatus } from '../types';
-import { EXCEL_FUZZY_MAX_DISTANCE, EXCEL_EMPTY_ROW_THRESHOLD } from '../shared/constants';
+import { EXCEL_FUZZY_MAX_DISTANCE } from '../shared/constants';
 import { normalizeCellValue, sanitizeObjectKey } from './sanitize';
-
 
 export class ExcelDataEngine {
   /**
@@ -16,10 +15,17 @@ export class ExcelDataEngine {
       throw new Error("Excel file contains no sheets.");
     }
 
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    
-    const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: null, raw: true });
+    let rawData: unknown[] = [];
+
+    // Find the first sheet that contains data rows (in case Sheet1 is an empty tab)
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+      if (data.length > 0) {
+        rawData = data;
+        break;
+      }
+    }
     
     const excelRows: ExcelRow[] = [];
     
@@ -34,12 +40,12 @@ export class ExcelDataEngine {
         }
       });
       
-      // Calculate empty threshold to skip completely blank rows
+      // Calculate empty threshold: skip ONLY if 100% of cells in the row are empty/null
       const keys = Object.keys(row);
       const emptyCount = keys.filter(k => row[k] === null || row[k] === "").length;
-      const emptyRatio = keys.length > 0 ? emptyCount / keys.length : 1;
+      const is100PercentEmpty = keys.length === 0 || emptyCount === keys.length;
       
-      if (emptyRatio >= EXCEL_EMPTY_ROW_THRESHOLD) {
+      if (is100PercentEmpty) {
         continue; 
       }
       
@@ -51,6 +57,10 @@ export class ExcelDataEngine {
         isValid: true,
         validationErrors: []
       });
+    }
+
+    if (excelRows.length === 0) {
+      throw new Error("Spreadsheet file contains no valid data rows.");
     }
     
     return excelRows;

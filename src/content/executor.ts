@@ -24,9 +24,14 @@ import {
   POST_SUBMIT_SETTLE_MS,
   WAIT_DOM_STABLE_TIMEOUT,
   MAX_SUBMIT_RETRIES,
-  SUBMIT_RETRY_SETTLE_MS
+  SUBMIT_RETRY_SETTLE_MS,
+  POST_DISMISS_RESET_WAIT_MS,
+  FORM_READY_RETRY_STEP_MS,
+  MODAL_DISMISS_CLICK_SETTLE_MS,
+  MODAL_ESCAPE_SETTLE_MS
 } from "../shared/constants";
 import { logger } from "../utils/logger";
+import { generateUUID } from "../utils/uuid";
 
 export class Executor {
   private isRunning = false;
@@ -85,7 +90,9 @@ export class Executor {
                     if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
                       canResume = true;
                     }
-                  } catch(e) {}
+                  } catch(e) {
+                    logger.warn('Executor', 'URL parsing failed during auto-resume siteUrl check:', e);
+                  }
                 }
                 
                 if (!canResume) {
@@ -271,8 +278,12 @@ export class Executor {
 
     // Immediate storage mutex check to prevent multi-tab race conditions
     const currentState = await StateManager.getState();
-    if (currentState?.mutexLock && currentState.mutexLock !== sessionId) {
-      logger.warn('Executor', `Executor blocked: Mutex locked by session ${currentState.mutexLock}`);
+    const isStaleLock = !currentState || 
+                        currentState.status === ExecutionStatus.COMPLETE || 
+                        currentState.status === ExecutionStatus.FAILED || 
+                        currentState.status === ExecutionStatus.IDLE;
+    if (currentState?.mutexLock && currentState.mutexLock !== sessionId && !isStaleLock) {
+      logger.warn('Executor', `Executor blocked: Mutex locked by session ${currentState.mutexLock} with status ${currentState.status}`);
       return;
     }
 
@@ -343,7 +354,9 @@ export class Executor {
           if (currentUrlObj.hostname === siteUrlObj.hostname && currentUrlObj.pathname === siteUrlObj.pathname) {
             urlsMatch = true;
           }
-        } catch(e) {}
+        } catch(e) {
+          logger.warn('Executor', 'URL parsing failed during fresh start URL check:', e);
+        }
 
         if (!urlsMatch) {
           logger.info('Executor', `Fresh start detected. Ensuring clean start URL: ${this.siteUrl}`);
@@ -556,7 +569,7 @@ export class Executor {
     
     if (dismissed) {
       // Wait for form to reset after dismissal and DOM to stabilize
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, POST_DISMISS_RESET_WAIT_MS));
       await SmartWaitEngine.waitForDOMStability(WAIT_DOM_STABLE_TIMEOUT).catch((err) => {
         logger.debug('Executor', `Post-reset DOM stability wait timed out: ${err.message}`);
       });
@@ -594,7 +607,7 @@ export class Executor {
             }
           }
           // Wait progressively longer between checks (500ms, 1000ms, 1500ms)
-          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, FORM_READY_RETRY_STEP_MS * (attempt + 1)));
         }
       } else {
         // No recorded steps to verify against, just proceed
@@ -690,7 +703,7 @@ export class Executor {
         if (isVisible && matchesKeyword) {
           logger.debug('Executor', `Clicking dismiss button in modal: "${(btn as HTMLElement).textContent?.trim()}"`);
           (btn as HTMLElement).click();
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, MODAL_DISMISS_CLICK_SETTLE_MS));
           return true;
         }
       }
@@ -705,14 +718,14 @@ export class Executor {
         if (el && this.isElementVisible(el as HTMLElement)) {
           logger.debug('Executor', `Clicking close selector in modal: ${selector}`);
           (el as HTMLElement).click();
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, MODAL_DISMISS_CLICK_SETTLE_MS));
           return true;
         }
       }
 
       // Strategy 3: Try pressing Escape key to close modals
       modalContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, MODAL_ESCAPE_SETTLE_MS));
     }
 
     // Check if any modal/overlay was dismissed
@@ -1223,16 +1236,7 @@ export class Executor {
   }
 
   private generateUUID(): string {
-    // BUG-040: Use crypto.randomUUID() for cryptographically strong UUIDs
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // Fallback for environments without crypto.randomUUID
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+    return generateUUID();
   }
 }
 

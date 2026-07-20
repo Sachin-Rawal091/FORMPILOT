@@ -3,6 +3,7 @@ import { StorageManager } from "../storage/StorageManager";
 import { RecordingQueueHandler } from "./handlers/RecordingQueueHandler";
 import { DataHandler } from "./handlers/DataHandler";
 import { logger } from "../utils/logger";
+import { MESSAGE_RETRY_TIMEOUT_MS } from "../shared/constants";
 
 logger.info('ServiceWorker', 'Initialized.');
 
@@ -69,28 +70,29 @@ if (chrome.runtime.onSuspend) {
   });
 }
 
+function trackActiveWebTab(tab?: chrome.tabs.Tab) {
+  if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
+    chrome.storage.local.set({ lastActiveWebTabId: tab.id });
+  }
+}
+
 // Action click listener to open the options page tab
 chrome.action.onClicked.addListener(() => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const activeTab = tabs[0];
-    if (activeTab && activeTab.id && activeTab.url && !activeTab.url.startsWith('chrome-extension://')) {
-      chrome.storage.local.set({ lastActiveWebTabId: activeTab.id });
-    }
+    trackActiveWebTab(tabs[0]);
     chrome.runtime.openOptionsPage();
   });
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   chrome.tabs.get(activeInfo.tabId, (tab) => {
-    if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
-      chrome.storage.local.set({ lastActiveWebTabId: tab.id });
-    }
+    trackActiveWebTab(tab);
   });
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, _changeInfo, tab) => {
-  if (tab && tab.id && tab.active && tab.url && !tab.url.startsWith('chrome-extension://')) {
-    chrome.storage.local.set({ lastActiveWebTabId: tab.id });
+  if (tab && tab.active) {
+    trackActiveWebTab(tab);
   }
 });
 
@@ -100,7 +102,7 @@ async function sendMessageWithRetry(tabId: number, message: any, retries = 5, de
     try {
       const result = await Promise.race([
         chrome.tabs.sendMessage(tabId, message),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Tab message timeout')), 2000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Tab message timeout')), MESSAGE_RETRY_TIMEOUT_MS))
       ]);
       return result;
     } catch (err) {
@@ -162,17 +164,18 @@ function isMissingReceiverError(err: any): boolean {
 // injecting it live and retrying, instead of failing silently forever.
 async function sendMessageWithSelfHeal(tabId: number, message: any): Promise<any> {
   try {
-    return await sendMessageWithRetry(tabId, message, 2, 400);
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch (err) {
-    if (!isMissingReceiverError(err)) throw err;
+    if (!isMissingReceiverError(err)) {
+      return await sendMessageWithRetry(tabId, message, 3, 500);
+    }
 
-    logger.warn('ServiceWorker', `No content script listening in tab ${tabId}. Attempting self-heal via programmatic injection...`);
+    logger.info('ServiceWorker', `No content script listening in tab ${tabId}. Attempting self-heal via programmatic injection...`);
     const injected = await injectContentScript(tabId);
     if (!injected) throw err;
 
-    // Give the freshly injected script a brief moment to run its constructor
-    // and register its message listener before we retry.
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Give the freshly injected script a brief moment to run constructor and register listener
+    await new Promise((resolve) => setTimeout(resolve, 300));
     return await sendMessageWithRetry(tabId, message, 3, 500);
   }
 }

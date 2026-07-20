@@ -113,15 +113,19 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
         throw new Error("No spreadsheet loaded. Please upload Excel data first.");
       }
 
-      // 1. Double check mutex state from current sessions
+      // 1. Double check mutex state from current sessions (ignore completed/failed/idle locks)
       const currentSessionState = await StorageManager.getExecutionState();
-      if (currentSessionState && currentSessionState.mutexLock !== null) {
+      if (
+        currentSessionState && 
+        currentSessionState.mutexLock !== null &&
+        currentSessionState.status !== ExecutionStatus.COMPLETE &&
+        currentSessionState.status !== ExecutionStatus.FAILED &&
+        currentSessionState.status !== ExecutionStatus.IDLE
+      ) {
         throw new Error("Another automation session is active. You must abort it first.");
       }
 
-      // 2. Determine target tab: last active web tab, fallback to open web tabs, or fail
-      // BUG-FIX: chrome.tabs.getCurrent's callback can fail to fire in some contexts,
-      // which would hang this await forever with no visible error. Race it against a timeout.
+      // 2. Determine target tab: siteUrl domain match, last active web tab, open web tabs, or auto-open
       const currentTab = await Promise.race([
         new Promise<chrome.tabs.Tab | undefined>((resolve) => {
           chrome.tabs.getCurrent(resolve);
@@ -132,22 +136,43 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
 
     let targetTabId: number | null = null;
 
-    // Check lastActiveWebTabId
-    const localData = await chrome.storage.local.get('lastActiveWebTabId');
-    const lastActiveWebTabId = localData.lastActiveWebTabId as number | undefined;
-
-    if (typeof lastActiveWebTabId === 'number' && lastActiveWebTabId !== currentTabId) {
+    // Check open tab matching selectedRecording.siteUrl domain
+    if (selectedRecording.siteUrl) {
       try {
-        const tab = await chrome.tabs.get(lastActiveWebTabId);
-        if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
-          targetTabId = tab.id;
+        const siteUrlObj = new URL(selectedRecording.siteUrl);
+        const openTabs = await chrome.tabs.query({});
+        const matchingTab = openTabs.find(t => {
+          if (!t.id || !t.url || t.url.startsWith('chrome-extension://')) return false;
+          try {
+            return new URL(t.url).hostname === siteUrlObj.hostname;
+          } catch {
+            return false;
+          }
+        });
+        if (matchingTab && matchingTab.id) {
+          targetTabId = matchingTab.id;
         }
-      } catch {
-        // Tab closed or inaccessible
+      } catch {}
+    }
+
+    // Check lastActiveWebTabId
+    if (!targetTabId) {
+      const localData = await chrome.storage.local.get('lastActiveWebTabId');
+      const lastActiveWebTabId = localData.lastActiveWebTabId as number | undefined;
+
+      if (typeof lastActiveWebTabId === 'number' && lastActiveWebTabId !== currentTabId) {
+        try {
+          const tab = await chrome.tabs.get(lastActiveWebTabId);
+          if (tab && tab.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
+            targetTabId = tab.id;
+          }
+        } catch {
+          // Tab closed or inaccessible
+        }
       }
     }
 
-    // Fallback: Find another web tab in any window
+    // Fallback: Find any open web tab
     if (!targetTabId) {
       const tabs = await chrome.tabs.query({});
       const fallbackTab = tabs.find(tab => 
@@ -161,7 +186,18 @@ export const createExecutionSlice: StateCreator<any, [], [], ExecutionSlice> = (
       }
     }
 
-    // Safeguard: If no valid web page tab is open, stop and show alert
+    // Auto-create new tab for siteUrl if no active web tab is open
+    if (!targetTabId && selectedRecording.siteUrl) {
+      try {
+        const newTab = await chrome.tabs.create({ url: selectedRecording.siteUrl, active: true });
+        if (newTab && newTab.id) {
+          targetTabId = newTab.id;
+          await new Promise(r => setTimeout(r, 1200));
+        }
+      } catch {}
+    }
+
+    // Safeguard: If no valid web page tab is open and couldn't create one, show alert
     if (!targetTabId) {
       throw new Error("Please open a web page tab before running automation.");
     }

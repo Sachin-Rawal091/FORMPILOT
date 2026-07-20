@@ -1,6 +1,7 @@
 import { Step, Action, SelectorMeta, FormPilotMessage, MessageType, ExecutionState, ExecutionStatus } from "../types";
 import { INPUT_DEBOUNCE_MS, DOUBLE_CLICK_WINDOW_MS, XPATH_MAX_DEPTH, SUBMIT_LATCH_SAFETY_MS } from "../shared/constants";
 import { logger } from "../utils/logger";
+import { generateUUID } from "../utils/uuid";
 
 export class RecordingEngine {
   private isRecording = false;
@@ -796,16 +797,7 @@ export class RecordingEngine {
   }
 
   private generateUUID(): string {
-    // BUG-040: Use crypto.randomUUID() for cryptographically strong UUIDs
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // Fallback for environments without crypto.randomUUID
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
+    return generateUUID();
   }
 }
 
