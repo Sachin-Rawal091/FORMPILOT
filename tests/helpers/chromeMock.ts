@@ -9,6 +9,8 @@
  *   afterEach(() => resetChromeMocks());
  */
 
+import { disableActionSettleWait } from '../../src/content/engines/ExecutionEngine';
+
 // In-memory stores simulating Chrome storage APIs
 const sessionStore: Record<string, unknown> = {};
 const localStore: Record<string, unknown> = {};
@@ -18,6 +20,7 @@ const localStore: Record<string, unknown> = {};
  * Call in beforeEach for any test that uses StorageManager or StateManager.
  */
 export function setupChromeMocks(): void {
+  disableActionSettleWait();
   (globalThis as any).chrome = {
     storage: {
       session: {

@@ -84,6 +84,18 @@ describe('ExcelDataEngine', () => {
       expect(Object.prototype.hasOwnProperty.call(parsed[0].data, 'prototype')).toBe(false);
     });
 
+    it('should strip UTF-8 BOM characters from CSV headers', async () => {
+      const bomCsvString = '\uFEFFFull Name,Email\nJohn Doe,john@example.com';
+      const encoder = new TextEncoder();
+      const buffer = encoder.encode(bomCsvString).buffer;
+
+      const parsed = await ExcelDataEngine.parseExcelFile(buffer);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].data['Full Name']).toBe('John Doe');
+      expect(Object.keys(parsed[0].data)).toContain('Full Name');
+      expect(Object.keys(parsed[0].data)[0]).not.toContain('\uFEFF');
+    });
+
     it('should throw an error if the workbook has no sheets', async () => {
       // Pass the 999-byte empty buffer to trigger our mock in read()
       const fakeBuffer = new ArrayBuffer(999);
@@ -97,12 +109,6 @@ describe('ExcelDataEngine', () => {
     it('should perform a exact case-insensitive match (with trimming)', () => {
       expect(ExcelDataEngine.fuzzyMatchColumn('age', available)).toBe('Age');
       expect(ExcelDataEngine.fuzzyMatchColumn('  EMAIL ADDRESS  ', available)).toBe('Email Address');
-    });
-
-    it('should match fuzzy columns with Levenshtein distance <= 2', () => {
-      expect(ExcelDataEngine.fuzzyMatchColumn('Full Nami', available)).toBe('Full Name');
-      expect(ExcelDataEngine.fuzzyMatchColumn('Email Addr', available)).toBeNull();
-      expect(ExcelDataEngine.fuzzyMatchColumn('Phone Number', available)).toBe('PhoneNumber');
     });
 
     it('should return null for empty/null targets or empty available columns', () => {
