@@ -1,6 +1,6 @@
 # FormPilot — Privacy Policy
 
-**Last Updated:** May 21, 2026
+**Last Updated:** July 21, 2026
 
 At FormPilot, we believe your data belongs to you. FormPilot is built to be a fully client-side, local-first browser extension. We do not harvest, collect, or transmit any user data, spreadsheet information, or recorded web flows to any external servers.
 
@@ -39,7 +39,7 @@ All data is stored **exclusively** inside your local browser storage:
 ## 4. Required Extension Permissions
 
 FormPilot requests the following permissions to operate on your behalf:
-*   `activeTab` & `<all_urls>`: Required to allow FormPilot's recorder and executor scripts to interact with form fields on target websites that you navigate to.
+*   `<all_urls>` (host permission): Required to allow FormPilot's recorder and executor scripts to interact with form fields on target websites that you navigate to.
 *   `storage`: Required to save and load recorded flows, user settings, and execution logs in local IndexedDB.
 *   `scripting`: Required to inject DOM helper libraries (such as safe React-input setters) into your active tab.
 *   `notifications`: Required to display desktop notifications when user attention is needed (e.g. when a CAPTCHA is detected).
