@@ -10,11 +10,10 @@ Record once. Feed it a spreadsheet. Let it fly across hundreds of rows and multi
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-Popup%20UI-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-<!-- Replace with your actual repo path -->
-
-`Sachin-Rawal091/formpilot`
+`Sachin-Rawal091/FORMPILOT`
 
 </div>
 
@@ -136,8 +135,8 @@ flowchart TD
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/formpilot.git
-cd formpilot
+git clone https://github.com/Sachin-Rawal091/FORMPILOT.git
+cd FORMPILOT
 npm install
 npm run dev        # starts Vite in watch mode with HMR
 ```
@@ -215,11 +214,15 @@ Contributions, bug reports, and feature requests are welcome.
 
 If you're fixing a bug in one of the core engines, please add or update the corresponding test in `tests/` — they're treated as the source of truth for interface behavior.
 
----
-
 ## ⚠️ Disclaimer
 
 FormPilot automates interactions with third-party websites, including forms that may require accurate, sensitive, or legally significant data (e.g. government portals). Use it responsibly, review every automated run, and ensure you have the right to submit data on the relevant platform. The maintainers are not responsible for misuse.
+
+---
+
+## 📄 License
+
+FormPilot is open-source software licensed under the [MIT License](LICENSE).
 
 <div align="center">
 
