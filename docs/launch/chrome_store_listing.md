@@ -1,17 +1,17 @@
-# FormPilot — Chrome Web Store Listing Details
+# FormAnchor — Chrome Web Store Listing Details
 
-This document contains the official metadata, descriptions, and feature lists for the FormPilot Chrome Web Store submission.
+This document contains the official metadata, descriptions, and feature lists for the FormAnchor Chrome Web Store submission.
 
 ---
 
 ## 1. Extension Metadata
 
-*   **Extension Name:** FormPilot — Resilient Automated Form Filler
-*   **Subtitle (Short Description - Max 150 chars):** Automatically fill complex, multi-page web forms from Excel spreadsheets. Features Shadow DOM piercing and intelligent CAPTCHA pause/recovery.
+*   **Extension Name:** FormAnchor — Resilient Automated Form Filler
+*   **Subtitle (Short Description - Max 132 chars):** Automatically fill complex, multi-page web forms from Excel. Shadow DOM piercing & smart CAPTCHA recovery.
 *   **Category:** Productivity
 *   **Supported Languages:** English (United States)
-*   **Privacy Policy URL:** `https://formpilot-egea2q1zi-sachinrawal473-5100s-projects.vercel.app/#/privacy`
-*   **Support URL:** `https://formpilot-egea2q1zi-sachinrawal473-5100s-projects.vercel.app/#/contact`
+*   **Privacy Policy URL:** `https://github.com/Sachin-Rawal091/FormPilot/blob/main/PRIVACY.md`
+*   **Support URL:** `https://github.com/Sachin-Rawal091/FormPilot/issues`
 
 ---
 
@@ -19,34 +19,36 @@ This document contains the official metadata, descriptions, and feature lists fo
 
 ### The Smartest, Most Resilient Way to Automate High-Volume Data Entry
 
-FormPilot is a production-grade, privacy-first browser automation tool designed to eliminate repetitive, manual form filling at scale. Unlike simple auto-fill extensions that break on modern web architectures, FormPilot is built with a resilient multi-layered automation engine that handles multi-page wizards, dynamic single-page applications (React, Vue, Angular), and real-world execution hiccups with full grace.
+> **Single Purpose:** FormAnchor automates repetitive web form filling from spreadsheet data.
 
-Whether you are filing tax documents, submitting government clearances, processing SaaS registrations, or uploading job application fields, FormPilot turns spreadsheets into seamless, hands-free automation.
+FormAnchor is a production-grade, privacy-first browser automation tool designed to eliminate repetitive, manual form filling at scale. Unlike simple auto-fill extensions that break on modern web architectures, FormAnchor is built with a resilient multi-layered automation engine that handles multi-page wizards, dynamic single-page applications (React, Vue, Angular), and real-world execution hiccups with full grace.
+
+Whether you are filing tax documents, submitting government clearances, processing SaaS registrations, or uploading job application fields, FormAnchor turns spreadsheets into seamless, hands-free automation.
 
 ---
 
 ### How It Works (The 3-Step Flow)
 
-1.  🔴 **Record Once:** Turn on the extension's high-fidelity recorder, navigate to your target form, and fill it out once. FormPilot captures every click, select, input, radio toggle, checkbox click, rich-text frame, and datepicker in a high-fidelity automation flow.
-2.  📊 **Upload Excel:** Drop your data spreadsheet. FormPilot parses it instantly in-browser using robust SheetJS parsers, presenting a clean column-mapping screen with visual confidence badges.
-3.  ▶️ **Fly on Autopilot:** Press Run. FormPilot iterates through your rows, executing the recorded steps step-by-step, validating input formats, waiting dynamically for DOM stability, and writing detailed execution logs locally.
+1.  🔴 **Record Once:** Turn on the extension's high-fidelity recorder, navigate to your target form, and fill it out once. FormAnchor captures every click, select, input, radio toggle, checkbox click, rich-text frame, and datepicker in a high-fidelity automation flow.
+2.  📊 **Upload Excel:** Drop your data spreadsheet. FormAnchor parses it instantly in-browser using robust SheetJS parsers, presenting a clean column-mapping screen with visual confidence badges.
+3.  ▶️ **Fly on Autopilot:** Press Run. FormAnchor iterates through your rows, executing the recorded steps step-by-step, validating input formats, waiting dynamically for DOM stability, and writing detailed execution logs locally.
 
 ---
 
 ### Core Automation Engines (Built for Real-World Sites)
 
-*   **8-Strategy Selector Fallback (with Shadow DOM Piercing):** If a web developer updates an input ID or relocates a field, FormPilot's Selector Engine automatically falls back through 8 alternative matching strategies (including XPath, computed CSS path, ARIA labels, and Associated Text labels). It recursively traverses the Shadow DOM up to 500 elements deep to find and fill elements hidden from generic extensions.
-*   **Smart Wait Engine (Dynamic DOM & Network Stability):** No more arbitrary sleep timers. FormPilot dynamically checks for layout stability using a MutationObserver, listens for fetch/XHR network idle ceilings, and monitors URL changes with a dual-signal SPA parser (verifying that both the URL has shifted and a significant fraction of body children have updated).
-*   **Smart Auto-Coercion & Variable Resolution:** FormPilot automatically handles 8 distinct missing-value scenarios. It auto-coerces Excel cell values to match form schemas (e.g. converting `"true"` to a boolean, or date strings to native Date objects) and uses configurable defaults when columns are empty.
-*   **Intelligent CAPTCHA Recovery Loop:** When a reCAPTCHA, hCaptcha, or Cloudflare challenge is encountered, FormPilot pauses automation, rings a sound notification, badges the extension icon, alerts the user, and renders a floating glassmorphic overlay. The user solves the CAPTCHA manually, clicks Resume, and FormPilot continues where it left off.
-*   **Save & Continue Checkpoints:** If your browser crashes or a tab closes mid-run, your state is preserved. FormPilot checkpoints execution progress after every step in volatile storage, letting you restore active sessions with zero data corruption.
+*   **8-Strategy Selector Fallback (with Shadow DOM Piercing):** If a web developer updates an input ID or relocates a field, FormAnchor's Selector Engine automatically falls back through 8 alternative matching strategies (including XPath, computed CSS path, ARIA labels, and Associated Text labels). It recursively traverses the Shadow DOM up to 500 elements deep to find and fill elements hidden from generic extensions.
+*   **Smart Wait Engine (Dynamic DOM & Network Stability):** No more arbitrary sleep timers. FormAnchor dynamically checks for layout stability using a MutationObserver, listens for fetch/XHR network idle ceilings, and monitors URL changes with a dual-signal SPA parser (verifying that both the URL has shifted and a significant fraction of body children have updated).
+*   **Smart Auto-Coercion & Variable Resolution:** FormAnchor automatically handles 8 distinct missing-value scenarios. It auto-coerces Excel cell values to match form schemas (e.g. converting `"true"` to a boolean, or date strings to native Date objects) and uses configurable defaults when columns are empty.
+*   **Intelligent CAPTCHA Recovery Loop:** When a reCAPTCHA, hCaptcha, or Cloudflare challenge is encountered, FormAnchor pauses automation, rings a sound notification, badges the extension icon, alerts the user, and renders a floating glassmorphic overlay. The user solves the CAPTCHA manually, clicks Resume, and FormAnchor continues where it left off.
+*   **Save & Continue Checkpoints:** If your browser crashes or a tab closes mid-run, your state is preserved. FormAnchor checkpoints execution progress after every step in volatile storage, letting you restore active sessions with zero data corruption.
 
 ---
 
 ### Privacy & Security First
 
 *   **100% Client-Side:** All data parsing, script recording, and form execution happen strictly inside your browser. No external API servers, no remote code execution, and no analytics tracking.
-*   **No Data Harvesting:** FormPilot never uploads your Excel data or recorded form scripts anywhere.
+*   **No Data Harvesting:** FormAnchor never uploads your Excel data or recorded form scripts anywhere.
 *   **IndexedDB Local Storage:** Large data volumes and execution logs are stored securely in local browser IndexedDB instances, bypassing the volatile 10MB chrome.storage limit.
 
 ---
@@ -84,5 +86,4 @@ Whether you are filing tax documents, submitting government clearances, processi
 *   **Screenshot 3 (Active Run Progress):** RunScreen displaying active progression radial indicators, rows succeeded/skipped counters, and live-scrolling execution logs. *(Recommended source: [03_run_progress.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/03_run_progress.png))*
 *   **Screenshot 4 (Activity Logs):** LogScreen displaying the split-pane session view, status indicators, and detailed log records. *(Recommended source: [04_activity_logs.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/04_activity_logs.png))*
 *   **Screenshot 5 (Settings Page):** SettingsScreen showcasing the balanced, responsive card layouts and diagnostics logs configuration. *(Recommended source: [05_settings_page.png](file:///d:/SACHIN%20RAWAL%20FILES/FormPilot/live_demo_screenshots/05_settings_page.png))*
-
 

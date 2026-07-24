@@ -17,6 +17,7 @@ build/
 out/
 bin/
 obj/
+formpilot-release.zip
 *.zip
 *.tar.gz
 *.tgz
@@ -104,9 +105,12 @@ bug.md
 FormPilot_RecordingEngine_Fix_Plan.md
 *[Pp]lan*.md
 bugFind.md
-
+broken-links-failure-audit-prompt.md
+FormPilot_Production_Audit_2026-07-21.md
+FormPilot_Full_Codebase_Audit_2026-07-23.md
+FormPilot_Production_Audit_2026-07-22.md
 # --- Local Root Sandbox & Temp Files ---
-# Ignore temporary sandbox/demo files created directly in root
+gh-pages/
 /debug_dates.cjs
 /job_portal.html
 /krp_portal.html
