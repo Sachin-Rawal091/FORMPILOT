@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "FormPilot",
+  "name": "FormAnchor",
   "version": "1.0.0",
-  "description": "Production-grade Chrome Extension that eliminates manual form filling at scale.",
+  "description": "Record a form once, upload Excel data, and automatically fill hundreds of forms with Shadow DOM support, CAPTCHA recovery, and full execution logs.",
   "action": {
-    "default_title": "FormPilot"
+    "default_title": "FormAnchor"
   },
   "options_ui": {
     "page": "public/popup.html",
